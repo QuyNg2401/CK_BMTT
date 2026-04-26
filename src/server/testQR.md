@@ -14,8 +14,8 @@ Bước A gồm 2 mục tiêu:
 ## 2) Tạo user để có userId
 
 ### Cách nhanh nhất: gọi API Register
-Endpoint:
-- POST `http://localhost:3000/auth/register`
+Bước 1: Endpoint:
+    - POST `http://localhost:3000/auth/register`
 
 Body mẫu:
 ```json
@@ -24,12 +24,14 @@ Body mẫu:
   "password": "Test@12345"
 }
 
-Lấy lưu secret key và tạo url QR
+Bước 2: Lấy lưu secret key và tạo url QR
 Endpoint:
-- POST `http://localhost:3000/mfa/setup`
+    - POST `http://localhost:3000/mfa/setup`
 
 Body mẫu:
 ```json
 {
   "userId": "1", // lấy userId mới tạo
 }
+
+Bước 3: Lấy qrCodeDataUrl paste vào trình duyệt để hiển thị QR
