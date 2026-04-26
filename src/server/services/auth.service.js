@@ -1,7 +1,7 @@
 const bcrypt = require('bcrypt');
 const { authenticator } = require('otplib');
 const qrcode = require('qrcode');
-const db = require('../configs/db');
+const db = require('../configs/connectDB');
 const createUserRepo = require('../repositories/user.repository');
 const createMfaLogRepo = require('../repositories/mfa_log.repository');
 

@@ -4,13 +4,14 @@ const cors = require('cors');
 
 const db = require('./configs/connectDB');
 
-const { routes } = require("./routes/routes");
+const router = require("./routes/routes");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cors());
 
 app.get('/', (req, res) => {
   res.status(200).json({ 
