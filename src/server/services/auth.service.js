@@ -14,7 +14,7 @@ const AuthService = {
         const existingUser = await userRepo.findByUsername(username);
         if (existingUser) throw new Error('The username already exists');
 
-        const salt = bcrypt.genSalt(10);
+        const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(password, salt);
 
         return await userRepo.insertUser(username, passwordHash);

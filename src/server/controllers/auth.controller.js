@@ -9,7 +9,7 @@ const AuthController = {
                 return res.status(400).json({message: 'Please enter all the required infomation'});
             }
 
-            const userId = AuthService.register(username, password);
+            const userId = await AuthService.register(username, password);
             res.status(201).json({
                 message: 'Registered successfully',
                 userId
@@ -21,7 +21,7 @@ const AuthController = {
 
     loginStep1: async (req, res) => {
         try {
-            const {username, password} = res.body;
+            const {username, password} = req.body;
             const result = await AuthService.loginStep1(username, password);
 
             res.status(201).json({
