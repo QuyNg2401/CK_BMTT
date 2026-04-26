@@ -174,7 +174,7 @@ export function SignUpScreen({ onSignUp, onLoginClick }: SignUpScreenProps) {
             </div>
 
             {/* Email */}
-            <div>
+            {/* <div>
               <label className="block text-[#374151] text-sm mb-1.5">Email address</label>
               <div
                 className={`relative flex items-center rounded-2xl border transition-all duration-200 ${
@@ -194,7 +194,7 @@ export function SignUpScreen({ onSignUp, onLoginClick }: SignUpScreenProps) {
                   className="w-full pl-11 pr-4 py-3.5 bg-transparent outline-none text-[#0f172a] placeholder-[#cbd5e1] rounded-2xl"
                 />
               </div>
-            </div>
+            </div> */}
 
             {/* Password */}
             <div>

@@ -313,7 +313,7 @@ export function LoginScreen({ onContinue, onSignUpClick }: LoginScreenProps) {
           </div>
 
           {/* SSO buttons */}
-          <div className="grid grid-cols-2 gap-3 mb-6">
+          {/* <div className="grid grid-cols-2 gap-3 mb-6">
             {['Google', 'Microsoft'].map(provider => (
               <button
                 key={provider}
@@ -323,7 +323,7 @@ export function LoginScreen({ onContinue, onSignUpClick }: LoginScreenProps) {
                 {provider}
               </button>
             ))}
-          </div>
+          </div> */}
 
           {/* Sign up link */}
           <p className="text-center text-[#64748b] text-sm">
