@@ -53,6 +53,10 @@ function PasswordStrength({ password }: { password: string }) {
 }
 
 export function SignUpScreen({ onSignUp, onLoginClick }: SignUpScreenProps) {
+  const API_BASE_URL =
+    (import.meta as { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL ||
+    'http://localhost:3000';
+
   const [name, setName] = useState('Jane Smith');
   const [email, setEmail] = useState('jane.smith@secureauth.io');
   const [password, setPassword] = useState('Secure@2024!');
@@ -61,9 +65,57 @@ export function SignUpScreen({ onSignUp, onLoginClick }: SignUpScreenProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [agreed, setAgreed] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [apiSuccess, setApiSuccess] = useState<string | null>(null);
 
-  const handleSubmit = () => {
-    onSignUp();
+  const handleSubmit = async () => {
+    if (!email.trim() || !password.trim() || !confirmPassword.trim()) {
+      setApiError('Please fill in all required fields.');
+      setApiSuccess(null);
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setApiError('Passwords do not match.');
+      setApiSuccess(null);
+      return;
+    }
+
+    if (!agreed) {
+      setApiError('Please accept Terms of Service and Privacy Policy.');
+      setApiSuccess(null);
+      return;
+    }
+
+    setIsSubmitting(true);
+    setApiError(null);
+    setApiSuccess(null);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: email.trim(),
+          password,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.message || 'Unable to create account.');
+      }
+
+      setApiSuccess('Account created successfully. Redirecting to login...');
+      setTimeout(() => onSignUp(), 600);
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : 'Unable to create account.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -154,11 +206,10 @@ export function SignUpScreen({ onSignUp, onLoginClick }: SignUpScreenProps) {
             <div>
               <label className="block text-[#374151] text-sm mb-1.5">Full name</label>
               <div
-                className={`relative flex items-center rounded-2xl border transition-all duration-200 ${
-                  focusedField === 'name'
+                className={`relative flex items-center rounded-2xl border transition-all duration-200 ${focusedField === 'name'
                     ? 'border-[#6366f1] shadow-[0_0_0_3px_rgba(99,102,241,0.15)]'
                     : 'border-[#e2e8f0]'
-                } bg-white`}
+                  } bg-white`}
               >
                 <User className="absolute left-4 w-4 h-4 text-[#94a3b8]" />
                 <input
@@ -174,14 +225,13 @@ export function SignUpScreen({ onSignUp, onLoginClick }: SignUpScreenProps) {
             </div>
 
             {/* Email */}
-            {/* <div>
+            <div>
               <label className="block text-[#374151] text-sm mb-1.5">Email address</label>
               <div
-                className={`relative flex items-center rounded-2xl border transition-all duration-200 ${
-                  focusedField === 'email'
+                className={`relative flex items-center rounded-2xl border transition-all duration-200 ${focusedField === 'email'
                     ? 'border-[#6366f1] shadow-[0_0_0_3px_rgba(99,102,241,0.15)]'
                     : 'border-[#e2e8f0]'
-                } bg-white`}
+                  } bg-white`}
               >
                 <Mail className="absolute left-4 w-4 h-4 text-[#94a3b8]" />
                 <input
@@ -194,17 +244,16 @@ export function SignUpScreen({ onSignUp, onLoginClick }: SignUpScreenProps) {
                   className="w-full pl-11 pr-4 py-3.5 bg-transparent outline-none text-[#0f172a] placeholder-[#cbd5e1] rounded-2xl"
                 />
               </div>
-            </div> */}
+            </div>
 
             {/* Password */}
             <div>
               <label className="block text-[#374151] text-sm mb-1.5">Password</label>
               <div
-                className={`relative flex items-center rounded-2xl border transition-all duration-200 ${
-                  focusedField === 'password'
+                className={`relative flex items-center rounded-2xl border transition-all duration-200 ${focusedField === 'password'
                     ? 'border-[#6366f1] shadow-[0_0_0_3px_rgba(99,102,241,0.15)]'
                     : 'border-[#e2e8f0]'
-                } bg-white`}
+                  } bg-white`}
               >
                 <Lock className="absolute left-4 w-4 h-4 text-[#94a3b8]" />
                 <input
@@ -230,15 +279,14 @@ export function SignUpScreen({ onSignUp, onLoginClick }: SignUpScreenProps) {
             <div>
               <label className="block text-[#374151] text-sm mb-1.5">Confirm password</label>
               <div
-                className={`relative flex items-center rounded-2xl border transition-all duration-200 ${
-                  confirmPassword && confirmPassword !== password
+                className={`relative flex items-center rounded-2xl border transition-all duration-200 ${confirmPassword && confirmPassword !== password
                     ? 'border-[#fca5a5] shadow-[0_0_0_3px_rgba(252,165,165,0.2)]'
                     : confirmPassword && confirmPassword === password
-                    ? 'border-[#86efac] shadow-[0_0_0_3px_rgba(134,239,172,0.2)]'
-                    : focusedField === 'confirm'
-                    ? 'border-[#6366f1] shadow-[0_0_0_3px_rgba(99,102,241,0.15)]'
-                    : 'border-[#e2e8f0]'
-                } bg-white`}
+                      ? 'border-[#86efac] shadow-[0_0_0_3px_rgba(134,239,172,0.2)]'
+                      : focusedField === 'confirm'
+                        ? 'border-[#6366f1] shadow-[0_0_0_3px_rgba(99,102,241,0.15)]'
+                        : 'border-[#e2e8f0]'
+                  } bg-white`}
               >
                 <Lock className="absolute left-4 w-4 h-4 text-[#94a3b8]" />
                 <input
@@ -275,9 +323,8 @@ export function SignUpScreen({ onSignUp, onLoginClick }: SignUpScreenProps) {
           {/* Terms */}
           <div className="flex items-start gap-2.5 mb-6 cursor-pointer" onClick={() => setAgreed(!agreed)}>
             <div
-              className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-all ${
-                agreed ? 'bg-[#6366f1] border-[#6366f1]' : 'border-[#e2e8f0]'
-              }`}
+              className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-all ${agreed ? 'bg-[#6366f1] border-[#6366f1]' : 'border-[#e2e8f0]'
+                }`}
             >
               {agreed && <CheckCircle className="w-3 h-3 text-white" />}
             </div>
@@ -293,11 +340,38 @@ export function SignUpScreen({ onSignUp, onLoginClick }: SignUpScreenProps) {
             onClick={handleSubmit}
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
+            disabled={isSubmitting}
             className="w-full py-3.5 bg-[#6366f1] text-white rounded-2xl hover:bg-[#4f46e5] transition-colors mb-5 shadow-[0_4px_16px_rgba(99,102,241,0.35)]"
             style={{ fontWeight: 600 }}
           >
-            Create account
+            {isSubmitting ? 'Creating account...' : 'Create account'}
           </motion.button>
+
+          <AnimatePresence>
+            {apiError && (
+              <motion.p
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                className="text-[#dc2626] text-sm text-center mb-4"
+              >
+                {apiError}
+              </motion.p>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {apiSuccess && (
+              <motion.p
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                className="text-[#16a34a] text-sm text-center mb-4"
+              >
+                {apiSuccess}
+              </motion.p>
+            )}
+          </AnimatePresence>
 
           <p className="text-center text-[#64748b] text-sm">
             Already have an account?{' '}

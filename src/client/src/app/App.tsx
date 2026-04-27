@@ -7,16 +7,27 @@ import { EnableTwoFactorScreen } from './components/EnableTwoFactorScreen';
 import { Dashboard } from './components/Dashboard';
 
 type Screen = 'login' | 'signup' | '2fa' | 'enable' | 'dashboard';
+type LoginSession = {
+  userId: number;
+  username: string;
+  mfaEnabled: boolean;
+};
 
 const screenOrder: Screen[] = ['login', 'signup', '2fa', 'enable', 'dashboard'];
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('login');
   const [prevScreen, setPrevScreen] = useState<Screen>('login');
+  const [session, setSession] = useState<LoginSession | null>(null);
 
   const navigate = (next: Screen) => {
     setPrevScreen(screen);
     setScreen(next);
+  };
+
+  const handleLoginSuccess = (loginSession: LoginSession) => {
+    setSession(loginSession);
+    navigate(loginSession.mfaEnabled ? '2fa' : 'enable');
   };
 
   const direction = screenOrder.indexOf(screen) >= screenOrder.indexOf(prevScreen) ? 1 : -1;
@@ -42,12 +53,12 @@ export default function App() {
         >
           {screen === 'login' ? (
             <LoginScreen
-              onContinue={() => navigate('2fa')}
+              onContinue={handleLoginSuccess}
               onSignUpClick={() => navigate('signup')}
             />
           ) : screen === 'signup' ? (
             <SignUpScreen
-              onSignUp={() => navigate('dashboard')}
+              onSignUp={() => navigate('login')}
               onLoginClick={() => navigate('login')}
             />
           ) : screen === '2fa' ? (
@@ -56,7 +67,11 @@ export default function App() {
               onVerified={() => navigate('dashboard')}
             />
           ) : screen === 'enable' ? (
-            <EnableTwoFactorScreen onComplete={() => navigate('dashboard')} />
+            <EnableTwoFactorScreen
+              userId={session?.userId ?? null}
+              username={session?.username ?? ''}
+              onComplete={() => navigate('dashboard')}
+            />
           ) : (
             <Dashboard onLogout={() => navigate('login')} />
           )}

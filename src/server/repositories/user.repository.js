@@ -31,7 +31,7 @@ const createUserRepository = (db) => {
 
         getCredentialsByUsername: async (username) => {
             const [rows] = await db.query(
-                'SELECT id, password_hash, mfa_enabled, mfa_secret FROM users WHERE username = ?',
+                'SELECT id, username, password_hash AS passwordHash, mfa_enabled AS mfaEnabled, mfa_secret AS mfaSecret FROM users WHERE username = ?',
                 [username]
             );
             return rows[0] || null;

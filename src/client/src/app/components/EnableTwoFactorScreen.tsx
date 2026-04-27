@@ -1,12 +1,12 @@
-import { Copy, Check, Shield, AlertTriangle, Smartphone, QrCode, KeyRound, CheckCircle2, Download, Eye, EyeOff } from 'lucide-react';
-import { useState, useRef, KeyboardEvent } from 'react';
+import { Copy, Check, Shield, AlertTriangle, Smartphone, QrCode, KeyRound, CheckCircle2, Download } from 'lucide-react';
+import { useState, useRef, KeyboardEvent, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface EnableTwoFactorScreenProps {
+  userId: number | null;
+  username: string;
   onComplete: () => void;
 }
-
-const SECRET_KEY = 'JBSWY3DP EHPK3PXP';
 
 const BACKUP_CODES = [
   'A3F2-9K1P', 'B7X4-2M8Q', 'C1R6-5N3T', 'D9W0-7L4U',
@@ -27,13 +27,61 @@ const steps = [
   { icon: CheckCircle2, title: 'Enter the verification code', desc: 'Type the 6-digit code to confirm setup' },
 ];
 
-export function EnableTwoFactorScreen({ onComplete }: EnableTwoFactorScreenProps) {
+export function EnableTwoFactorScreen({ userId, username, onComplete }: EnableTwoFactorScreenProps) {
+  const API_BASE_URL =
+    (import.meta as { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL ||
+    'http://localhost:3000';
+
   const [code, setCode] = useState(['', '', '', '', '', '']);
+  const [secretKey, setSecretKey] = useState('');
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
+  const [isLoadingQr, setIsLoadingQr] = useState(false);
+  const [qrError, setQrError] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
   const [copiedCodes, setCopiedCodes] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [showBackupCodes, setShowBackupCodes] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  const loadMfaSetup = async () => {
+    if (!userId) {
+      setQrError('Missing userId. Please login again before enabling 2FA.');
+      return;
+    }
+
+    setIsLoadingQr(true);
+    setQrError(null);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/mfa/setup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.message || 'Unable to generate QR code.');
+      }
+
+      if (typeof payload.secret !== 'string' || typeof payload.qrCodeDataUrl !== 'string') {
+        throw new Error('Invalid response while generating 2FA setup.');
+      }
+
+      setSecretKey(payload.secret);
+      setQrCodeDataUrl(payload.qrCodeDataUrl);
+    } catch (error) {
+      setQrError(error instanceof Error ? error.message : 'Unable to generate QR code.');
+    } finally {
+      setIsLoadingQr(false);
+    }
+  };
+
+  useEffect(() => {
+    loadMfaSetup();
+  }, [userId]);
 
   const handleChange = (index: number, value: string) => {
     if (!/^\d*$/.test(value)) return;
@@ -61,7 +109,9 @@ export function EnableTwoFactorScreen({ onComplete }: EnableTwoFactorScreenProps
   };
 
   const handleCopyKey = () => {
-    navigator.clipboard.writeText(SECRET_KEY.replace(/\s/g, ''));
+    if (!secretKey) return;
+
+    navigator.clipboard.writeText(secretKey.replace(/\s/g, ''));
     setCopiedKey(true);
     setTimeout(() => setCopiedKey(false), 2000);
   };
@@ -73,11 +123,14 @@ export function EnableTwoFactorScreen({ onComplete }: EnableTwoFactorScreenProps
   };
 
   const handleEnable = () => {
+    if (!isFilled || !secretKey || isLoadingQr) return;
+
     setIsSuccess(true);
     setTimeout(() => onComplete(), 1200);
   };
 
   const isFilled = code.every(d => d !== '');
+  const formattedSecret = secretKey.replace(/(.{4})/g, '$1 ').trim();
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#f0f6ff] py-8 px-4">
@@ -103,7 +156,7 @@ export function EnableTwoFactorScreen({ onComplete }: EnableTwoFactorScreenProps
             </h1>
           </div>
           <p className="text-blue-200 text-xs ml-11">
-            Linked to <span className="text-white" style={{ fontWeight: 600 }}>jane.smith@secureauth.io</span> · SecureAuth Free Plan
+            Linked to <span className="text-white" style={{ fontWeight: 600 }}>{username || 'current-user'}</span> · SecureAuth Free Plan
           </p>
         </div>
 
@@ -170,64 +223,21 @@ export function EnableTwoFactorScreen({ onComplete }: EnableTwoFactorScreenProps
               </p>
               <div className="relative mb-3">
                 <div className="w-[190px] h-[190px] rounded-2xl border-2 border-[#bfdbfe] bg-white p-3 shadow-[0_4px_20px_rgba(59,130,246,0.10)]">
-                  <svg width="166" height="166" viewBox="0 0 180 180">
-                    <rect width="180" height="180" fill="white"/>
-                    <rect x="10" y="10" width="50" height="50" rx="4" fill="#1e293b"/>
-                    <rect x="18" y="18" width="34" height="34" rx="2" fill="white"/>
-                    <rect x="24" y="24" width="22" height="22" rx="1" fill="#1e293b"/>
-                    <rect x="120" y="10" width="50" height="50" rx="4" fill="#1e293b"/>
-                    <rect x="128" y="18" width="34" height="34" rx="2" fill="white"/>
-                    <rect x="134" y="24" width="22" height="22" rx="1" fill="#1e293b"/>
-                    <rect x="10" y="120" width="50" height="50" rx="4" fill="#1e293b"/>
-                    <rect x="18" y="128" width="34" height="34" rx="2" fill="white"/>
-                    <rect x="24" y="134" width="22" height="22" rx="1" fill="#1e293b"/>
-                    <rect x="70" y="10" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="82" y="10" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="94" y="10" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="106" y="10" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="70" y="22" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="94" y="22" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="70" y="34" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="106" y="34" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="70" y="46" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="82" y="46" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="10" y="70" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="34" y="70" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="58" y="70" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="70" y="70" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="94" y="70" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="118" y="70" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="142" y="70" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="166" y="70" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="10" y="82" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="46" y="82" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="70" y="82" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="106" y="82" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="130" y="82" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="166" y="82" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="10" y="94" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="22" y="94" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="46" y="94" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="82" y="94" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="106" y="94" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="154" y="94" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="10" y="106" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="34" y="106" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="82" y="106" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="118" y="106" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="142" y="106" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="70" y="130" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="94" y="130" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="118" y="130" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="70" y="142" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="130" y="142" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="154" y="142" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="82" y="154" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="106" y="154" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="142" y="154" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="70" y="166" width="8" height="8" rx="1" fill="#1e293b"/>
-                    <rect x="118" y="166" width="8" height="8" rx="1" fill="#1e293b"/>
-                  </svg>
+                  {isLoadingQr ? (
+                    <div className="h-full w-full rounded-xl bg-[#f8fafc] flex items-center justify-center text-[#64748b] text-xs">
+                      Generating QR...
+                    </div>
+                  ) : qrCodeDataUrl ? (
+                    <img
+                      src={qrCodeDataUrl}
+                      alt="MFA QR code"
+                      className="h-full w-full rounded-xl object-contain"
+                    />
+                  ) : (
+                    <div className="h-full w-full rounded-xl bg-[#fef2f2] border border-[#fecaca] flex items-center justify-center text-[#b91c1c] text-xs text-center px-2">
+                      QR unavailable
+                    </div>
+                  )}
                 </div>
                 <div className="absolute top-1.5 left-1.5 w-4 h-4 border-l-2 border-t-2 border-[#3b82f6] rounded-tl" />
                 <div className="absolute top-1.5 right-1.5 w-4 h-4 border-r-2 border-t-2 border-[#3b82f6] rounded-tr" />
@@ -235,14 +245,28 @@ export function EnableTwoFactorScreen({ onComplete }: EnableTwoFactorScreenProps
                 <div className="absolute bottom-1.5 right-1.5 w-4 h-4 border-r-2 border-b-2 border-[#3b82f6] rounded-br" />
               </div>
 
+              {qrError && (
+                <div className="w-full mb-3 text-xs text-[#b91c1c] bg-[#fef2f2] border border-[#fecaca] rounded-lg px-3 py-2">
+                  <p>{qrError}</p>
+                  <button
+                    onClick={loadMfaSetup}
+                    className="mt-2 text-[#1d4ed8] hover:text-[#1e40af]"
+                    style={{ fontWeight: 600 }}
+                  >
+                    Retry QR generation
+                  </button>
+                </div>
+              )}
+
               {/* Setup key copy */}
               <div className="w-full">
                 <p className="text-[#94a3b8] text-xs text-center mb-1.5">Manual setup key</p>
                 <button
                   onClick={handleCopyKey}
+                  disabled={!secretKey}
                   className="w-full flex items-center justify-between gap-2 bg-[#f8fafc] border border-[#e2e8f0] hover:border-[#93c5fd] hover:bg-[#eff6ff] rounded-xl px-3 py-2.5 transition-all group"
                 >
-                  <span className="text-[#1e293b] font-mono text-sm tracking-widest">{SECRET_KEY}</span>
+                  <span className="text-[#1e293b] font-mono text-sm tracking-widest">{formattedSecret || '---- ---- ---- ----'}</span>
                   <span className={`flex items-center gap-1 text-xs flex-shrink-0 transition-colors ${copiedKey ? 'text-[#22c55e]' : 'text-[#94a3b8] group-hover:text-[#3b82f6]'}`}>
                     {copiedKey ? <><Check className="w-3.5 h-3.5" /> Copied</> : <><Copy className="w-3.5 h-3.5" /> Copy</>}
                   </span>
@@ -263,18 +287,19 @@ export function EnableTwoFactorScreen({ onComplete }: EnableTwoFactorScreenProps
               {code.map((digit, index) => (
                 <input
                   key={index}
-                  ref={el => inputRefs.current[index] = el}
+                  ref={el => {
+                    inputRefs.current[index] = el;
+                  }}
                   type="text"
                   inputMode="numeric"
                   maxLength={1}
                   value={digit}
                   onChange={e => handleChange(index, e.target.value)}
                   onKeyDown={e => handleKeyDown(index, e)}
-                  className={`w-11 text-center rounded-xl border-2 outline-none transition-all duration-200 ${
-                    digit
+                  className={`w-11 text-center rounded-xl border-2 outline-none transition-all duration-200 ${digit
                       ? 'border-[#3b82f6] bg-[#eff6ff] text-[#1e40af]'
                       : 'border-[#e2e8f0] hover:border-[#93c5fd] bg-white text-[#0f172a]'
-                  }`}
+                    }`}
                   style={{ fontSize: '1.25rem', fontWeight: 700, height: '50px' }}
                 />
               ))}
@@ -286,11 +311,11 @@ export function EnableTwoFactorScreen({ onComplete }: EnableTwoFactorScreenProps
             onClick={handleEnable}
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
-            className={`w-full py-3.5 rounded-2xl text-white transition-all mb-4 shadow-[0_4px_16px_rgba(59,130,246,0.28)] ${
-              isFilled || isSuccess
+            disabled={!isFilled || !secretKey || isLoadingQr || isSuccess}
+            className={`w-full py-3.5 rounded-2xl text-white transition-all mb-4 shadow-[0_4px_16px_rgba(59,130,246,0.28)] ${isFilled && secretKey && !isLoadingQr
                 ? 'bg-[#3b82f6] hover:bg-[#2563eb]'
                 : 'bg-[#93c5fd] cursor-not-allowed'
-            }`}
+              }`}
             style={{ fontWeight: 600 }}
           >
             <AnimatePresence mode="wait">

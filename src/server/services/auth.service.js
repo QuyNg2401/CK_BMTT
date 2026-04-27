@@ -30,7 +30,7 @@ const AuthService = {
         return {
             userId: user.id,
             username: user.username,
-            mfaEnabled: user.mfa_enabled === 1
+            mfaEnabled: user.mfaEnabled === 1
         };
     },
 }

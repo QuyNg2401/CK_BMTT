@@ -2,8 +2,14 @@ import { useState } from 'react';
 import { Eye, EyeOff, Mail, Lock, Shield, CheckCircle, Zap, Globe, Zap as FlashIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
+type LoginResult = {
+  userId: number;
+  username: string;
+  mfaEnabled: boolean;
+};
+
 interface LoginScreenProps {
-  onContinue: () => void;
+  onContinue: (result: LoginResult) => void;
   onSignUpClick: () => void;
 }
 
@@ -20,13 +26,18 @@ const DEMO_ACCOUNT = {
 };
 
 export function LoginScreen({ onContinue, onSignUpClick }: LoginScreenProps) {
+  const API_BASE_URL =
+    (import.meta as { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL ||
+    'http://localhost:3000';
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [hasError, setHasError] = useState(false);
-  const [attemptCount, setAttemptCount] = useState(0);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [filledDemo, setFilledDemo] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   const isDemoCredentials = email === DEMO_ACCOUNT.email && password === DEMO_ACCOUNT.password;
 
@@ -34,28 +45,56 @@ export function LoginScreen({ onContinue, onSignUpClick }: LoginScreenProps) {
     setEmail(DEMO_ACCOUNT.email);
     setPassword(DEMO_ACCOUNT.password);
     setHasError(false);
-    setAttemptCount(0);
+    setApiError(null);
     setFilledDemo(true);
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!email || !password) {
       setHasError(true);
+      setApiError('Please fill in all fields');
       return;
     }
-    // Demo account: skip error, go straight through
-    if (isDemoCredentials) {
+
+    setIsSubmitting(true);
+    setHasError(false);
+    setApiError(null);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: email.trim(),
+          password,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.message || 'Unable to login. Please try again.');
+      }
+
+      const result = payload?.data;
+      const isValidResult =
+        result &&
+        typeof result.userId === 'number' &&
+        typeof result.username === 'string' &&
+        typeof result.mfaEnabled === 'boolean';
+
+      if (!isValidResult) {
+        throw new Error('Invalid response from server.');
+      }
+
       setHasError(false);
-      onContinue();
-      return;
-    }
-    const newCount = attemptCount + 1;
-    setAttemptCount(newCount);
-    if (newCount === 1) {
+      onContinue(result);
+    } catch (error) {
       setHasError(true);
-    } else {
-      setHasError(false);
-      onContinue();
+      setApiError(error instanceof Error ? error.message : 'Unable to login right now.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -203,11 +242,10 @@ export function LoginScreen({ onContinue, onSignUpClick }: LoginScreenProps) {
             <div>
               <label className="block text-[#374151] text-sm mb-1.5">Email address</label>
               <div
-                className={`relative flex items-center rounded-2xl border transition-all duration-200 ${
-                  focusedField === 'email'
+                className={`relative flex items-center rounded-2xl border transition-all duration-200 ${focusedField === 'email'
                     ? 'border-[#3b82f6] shadow-[0_0_0_3px_rgba(59,130,246,0.15)]'
                     : 'border-[#e2e8f0]'
-                } bg-white`}
+                  } bg-white`}
               >
                 <Mail className="absolute left-4 w-4 h-4 text-[#94a3b8]" />
                 <input
@@ -231,13 +269,12 @@ export function LoginScreen({ onContinue, onSignUpClick }: LoginScreenProps) {
                 </button>
               </div>
               <div
-                className={`relative flex items-center rounded-2xl border transition-all duration-200 ${
-                  hasError
+                className={`relative flex items-center rounded-2xl border transition-all duration-200 ${hasError
                     ? 'border-[#fca5a5] shadow-[0_0_0_3px_rgba(252,165,165,0.25)]'
                     : focusedField === 'password'
-                    ? 'border-[#3b82f6] shadow-[0_0_0_3px_rgba(59,130,246,0.15)]'
-                    : 'border-[#e2e8f0]'
-                } bg-white`}
+                      ? 'border-[#3b82f6] shadow-[0_0_0_3px_rgba(59,130,246,0.15)]'
+                      : 'border-[#e2e8f0]'
+                  } bg-white`}
               >
                 <Lock className="absolute left-4 w-4 h-4 text-[#94a3b8]" />
                 <input
@@ -269,9 +306,7 @@ export function LoginScreen({ onContinue, onSignUpClick }: LoginScreenProps) {
                     <div className="flex items-center gap-2 bg-[#fef2f2] border border-[#fecaca] rounded-xl px-3 py-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-[#ef4444] flex-shrink-0" />
                       <p className="text-[#dc2626] text-xs">
-                        {!email || !password
-                          ? 'Please fill in all fields'
-                          : 'Incorrect email or password. Try again.'}
+                        {apiError || 'Incorrect email or password. Try again.'}
                       </p>
                     </div>
                   </motion.div>
@@ -292,14 +327,14 @@ export function LoginScreen({ onContinue, onSignUpClick }: LoginScreenProps) {
             onClick={handleLogin}
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
-            className={`w-full py-3.5 rounded-2xl text-white transition-colors mb-5 shadow-[0_4px_16px_rgba(59,130,246,0.35)] ${
-              isDemoCredentials
+            disabled={isSubmitting}
+            className={`w-full py-3.5 rounded-2xl text-white transition-colors mb-5 shadow-[0_4px_16px_rgba(59,130,246,0.35)] ${isDemoCredentials
                 ? 'bg-gradient-to-r from-[#3b82f6] to-[#6366f1] hover:from-[#2563eb] hover:to-[#4f46e5]'
                 : 'bg-[#3b82f6] hover:bg-[#2563eb]'
-            }`}
+              }`}
             style={{ fontWeight: 600 }}
           >
-            {isDemoCredentials ? 'Sign in as Jane Smith →' : 'Continue with email'}
+            {isSubmitting ? 'Signing in...' : isDemoCredentials ? 'Sign in as Jane Smith →' : 'Continue with email'}
           </motion.button>
 
           {/* OR CONTINUE WITH divider */}
@@ -337,20 +372,6 @@ export function LoginScreen({ onContinue, onSignUpClick }: LoginScreenProps) {
             </button>
           </p>
 
-          {/* Demo hint — only for non-demo wrong attempts */}
-          <AnimatePresence>
-            {hasError && attemptCount >= 1 && !isDemoCredentials && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="mt-4 text-center"
-              >
-                <p className="text-[#94a3b8] text-xs">
-                  Demo mode: click "Continue" again to proceed to 2FA →
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
       </div>
     </div>
