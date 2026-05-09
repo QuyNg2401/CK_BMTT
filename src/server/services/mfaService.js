@@ -4,6 +4,8 @@ const QRCode = require("qrcode");
 const db = require("../configs/connectDB");
 const createUserRepo = require("../repositories/user.repository");
 
+// import thư viện otp
+const { verifySync } = require("otplib");
 // Khởi tạo Repository
 const userRepo = createUserRepo(db);
 
@@ -56,6 +58,29 @@ const MfaService = {
     await userRepo.setMfaStatus(userId, false);
 
     return { secretBase32, otpauthUri, qrCodeDataUrl };
+  },
+
+  verifySetup: async ({ userId, token }) => {
+    const user = await userRepo.findById(userId);
+    if (!user) {
+      throw new Error("không tìm thấy user");
+    }
+    if (!user.mfa_secret) {
+      throw new Error("user này chưa bật 2FA");
+    }
+    const result = verifySync({
+      secret: user.mfa_secret,
+      token: token,
+      strategy: 'totp'
+    });
+    const isValid = result.valid;
+
+    if (isValid) {
+      await userRepo.setMfaStatus(userId, true);
+      return true;
+    } else {
+      return false;
+    }
   },
 };
 

@@ -52,7 +52,35 @@ const MfaController = {
       return res.status(status).json({ message });
     }
   },
+  verify: async (req, res) => {
+    const { userId, token } = req.body ?? {};
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ message: "UserId không hợp lệ" });
+    }
+    if (typeof token !== "string" || token.trim().length === 0) {
+      return res.status(400).json({ message: "Thiếu mã token 2FA" })
+    } try {
+      const isValid = await MfaService.verifySetup({ userId, token });
+      if (isValid) {
+        return res.status(200).json({
+          message: "Đã xác thực 2FA thành công"
+        })
+      } else {
+        return res.status(400).json({ message: "Mã token không hợp lệ hoặc đã hết hạn" })
+      }
+    } catch (error) {
+      console.log("LỖI CHI TIẾT:", error);
+      return res.status(500).json({
+        message: error.message
+      })
+    }
+
+
+
+  }
+
 };
+
 
 module.exports = MfaController;
 
