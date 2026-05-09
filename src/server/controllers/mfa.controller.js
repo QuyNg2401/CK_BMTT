@@ -1,5 +1,13 @@
 const MfaService = require("../services/mfaService");
 
+const getClientIp = (req) => {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.trim().length > 0) {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.ip || req.connection?.remoteAddress || '';
+};
+
 const MfaController = {
   createSecret: async (req, res) => {
     const { email } = req.body ?? {};
@@ -60,7 +68,8 @@ const MfaController = {
     if (typeof token !== "string" || token.trim().length === 0) {
       return res.status(400).json({ message: "Thiếu mã token 2FA" })
     } try {
-      const isValid = await MfaService.verifySetup({ userId, token });
+      const ipAddress = getClientIp(req);
+      const isValid = await MfaService.verifySetup({ userId, token, ipAddress });
       if (isValid) {
         return res.status(200).json({
           message: "Đã xác thực 2FA thành công"

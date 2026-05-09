@@ -1,5 +1,12 @@
-const { verify } = require('otplib');
 const AuthService = require('../services/auth.service');
+
+const getClientIp = (req) => {
+    const forwarded = req.headers['x-forwarded-for'];
+    if (typeof forwarded === 'string' && forwarded.trim().length > 0) {
+        return forwarded.split(',')[0].trim();
+    }
+    return req.ip || req.connection?.remoteAddress || '';
+};
 
 const AuthController = {
     register: async (req, res) => {
@@ -24,10 +31,19 @@ const AuthController = {
             const {username, password} = req.body;
             const result = await AuthService.loginStep1(username, password);
 
-            res.status(201).json({
-                message: 'Password verification successful!',
-                data: result
-            });
+            res.status(200).json({ data: result });
+        } catch (error) {
+            res.status(401).json({ message: error.message });
+        }
+    },
+
+    verifyLoginStep2: async (req, res) => {
+        try {
+            const { userId, token } = req.body;
+            const ipAddress = getClientIp(req);
+            const result = await AuthService.verifyLoginStep2(userId, token, ipAddress);
+
+            res.status(200).json({ data: result });
         } catch (error) {
             res.status(401).json({ message: error.message });
         }

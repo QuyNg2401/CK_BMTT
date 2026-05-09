@@ -11,6 +11,7 @@ type LoginSession = {
   userId: number;
   username: string;
   mfaEnabled: boolean;
+  accessToken?: string;
 };
 
 const screenOrder: Screen[] = ['login', 'signup', '2fa', 'enable', 'dashboard'];
@@ -26,8 +27,21 @@ export default function App() {
   };
 
   const handleLoginSuccess = (loginSession: LoginSession) => {
+    console.log('[App] handleLoginSuccess called with:', loginSession);
     setSession(loginSession);
-    navigate(loginSession.mfaEnabled ? '2fa' : 'enable');
+    const nextScreen = loginSession.mfaEnabled ? '2fa' : 'enable';
+    console.log('[App] Routing to:', nextScreen, '(mfaEnabled=' + loginSession.mfaEnabled + ')');
+    navigate(nextScreen);
+  };
+
+  const handleOtpVerified = (verifiedSession: LoginSession) => {
+    setSession(prev => ({
+      userId: verifiedSession.userId,
+      username: verifiedSession.username,
+      mfaEnabled: true,
+      accessToken: verifiedSession.accessToken ?? prev?.accessToken,
+    }));
+    navigate('dashboard');
   };
 
   const direction = screenOrder.indexOf(screen) >= screenOrder.indexOf(prevScreen) ? 1 : -1;
@@ -64,7 +78,9 @@ export default function App() {
           ) : screen === '2fa' ? (
             <TwoFactorScreen
               onBack={() => navigate('login')}
-              onVerified={() => navigate('dashboard')}
+              onVerified={handleOtpVerified}
+              userId={session?.userId ?? null}
+              username={session?.username ?? ''}
             />
           ) : screen === 'enable' ? (
             <EnableTwoFactorScreen
@@ -73,7 +89,10 @@ export default function App() {
               onComplete={() => navigate('dashboard')}
             />
           ) : (
-            <Dashboard onLogout={() => navigate('login')} />
+            <Dashboard
+              onLogout={() => navigate('login')}
+              username={session?.username ?? ''}
+            />
           )}
         </motion.div>
       </AnimatePresence>

@@ -6,6 +6,7 @@ type LoginResult = {
   userId: number;
   username: string;
   mfaEnabled: boolean;
+  accessToken?: string;
 };
 
 interface LoginScreenProps {
@@ -77,7 +78,9 @@ export function LoginScreen({ onContinue, onSignUpClick }: LoginScreenProps) {
         throw new Error(payload?.message || 'Unable to login. Please try again.');
       }
 
-      const result = payload?.data;
+      const result = payload?.data ?? payload;
+      console.log('[LoginScreen] API response:', { result, rawPayload: payload });
+
       const isValidResult =
         result &&
         typeof result.userId === 'number' &&
@@ -85,9 +88,11 @@ export function LoginScreen({ onContinue, onSignUpClick }: LoginScreenProps) {
         typeof result.mfaEnabled === 'boolean';
 
       if (!isValidResult) {
+        console.error('[LoginScreen] Invalid result format:', { result, isValidResult });
         throw new Error('Invalid response from server.');
       }
 
+      console.log('[LoginScreen] Login successful, result:', { userId: result.userId, username: result.username, mfaEnabled: result.mfaEnabled });
       setHasError(false);
       onContinue(result);
     } catch (error) {
@@ -243,8 +248,8 @@ export function LoginScreen({ onContinue, onSignUpClick }: LoginScreenProps) {
               <label className="block text-[#374151] text-sm mb-1.5">Email address</label>
               <div
                 className={`relative flex items-center rounded-2xl border transition-all duration-200 ${focusedField === 'email'
-                    ? 'border-[#3b82f6] shadow-[0_0_0_3px_rgba(59,130,246,0.15)]'
-                    : 'border-[#e2e8f0]'
+                  ? 'border-[#3b82f6] shadow-[0_0_0_3px_rgba(59,130,246,0.15)]'
+                  : 'border-[#e2e8f0]'
                   } bg-white`}
               >
                 <Mail className="absolute left-4 w-4 h-4 text-[#94a3b8]" />
@@ -270,10 +275,10 @@ export function LoginScreen({ onContinue, onSignUpClick }: LoginScreenProps) {
               </div>
               <div
                 className={`relative flex items-center rounded-2xl border transition-all duration-200 ${hasError
-                    ? 'border-[#fca5a5] shadow-[0_0_0_3px_rgba(252,165,165,0.25)]'
-                    : focusedField === 'password'
-                      ? 'border-[#3b82f6] shadow-[0_0_0_3px_rgba(59,130,246,0.15)]'
-                      : 'border-[#e2e8f0]'
+                  ? 'border-[#fca5a5] shadow-[0_0_0_3px_rgba(252,165,165,0.25)]'
+                  : focusedField === 'password'
+                    ? 'border-[#3b82f6] shadow-[0_0_0_3px_rgba(59,130,246,0.15)]'
+                    : 'border-[#e2e8f0]'
                   } bg-white`}
               >
                 <Lock className="absolute left-4 w-4 h-4 text-[#94a3b8]" />
@@ -329,8 +334,8 @@ export function LoginScreen({ onContinue, onSignUpClick }: LoginScreenProps) {
             whileTap={{ scale: 0.98 }}
             disabled={isSubmitting}
             className={`w-full py-3.5 rounded-2xl text-white transition-colors mb-5 shadow-[0_4px_16px_rgba(59,130,246,0.35)] ${isDemoCredentials
-                ? 'bg-gradient-to-r from-[#3b82f6] to-[#6366f1] hover:from-[#2563eb] hover:to-[#4f46e5]'
-                : 'bg-[#3b82f6] hover:bg-[#2563eb]'
+              ? 'bg-gradient-to-r from-[#3b82f6] to-[#6366f1] hover:from-[#2563eb] hover:to-[#4f46e5]'
+              : 'bg-[#3b82f6] hover:bg-[#2563eb]'
               }`}
             style={{ fontWeight: 600 }}
           >

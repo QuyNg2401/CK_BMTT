@@ -37,6 +37,8 @@ export function EnableTwoFactorScreen({ userId, username, onComplete }: EnableTw
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
   const [isLoadingQr, setIsLoadingQr] = useState(false);
   const [qrError, setQrError] = useState<string | null>(null);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
   const [copiedCodes, setCopiedCodes] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -88,6 +90,7 @@ export function EnableTwoFactorScreen({ userId, username, onComplete }: EnableTw
     const newCode = [...code];
     newCode[index] = value.slice(-1);
     setCode(newCode);
+    setVerifyError(null);
     if (value && index < 5) inputRefs.current[index + 1]?.focus();
   };
 
@@ -104,6 +107,7 @@ export function EnableTwoFactorScreen({ userId, username, onComplete }: EnableTw
     const newCode = [...code];
     pasted.split('').forEach((char, i) => { if (i < 6) newCode[i] = char; });
     setCode(newCode);
+    setVerifyError(null);
     const nextEmpty = newCode.findIndex(v => !v);
     inputRefs.current[nextEmpty !== -1 ? nextEmpty : 5]?.focus();
   };
@@ -122,11 +126,43 @@ export function EnableTwoFactorScreen({ userId, username, onComplete }: EnableTw
     setTimeout(() => setCopiedCodes(false), 2000);
   };
 
-  const handleEnable = () => {
-    if (!isFilled || !secretKey || isLoadingQr) return;
+  const handleEnable = async () => {
+    if (!userId) {
+      setVerifyError('Missing userId. Please login again before enabling 2FA.');
+      return;
+    }
+    if (!isFilled || !secretKey || isLoadingQr || isVerifying) return;
 
-    setIsSuccess(true);
-    setTimeout(() => onComplete(), 1200);
+    const token = code.join('');
+    if (token.length !== 6) {
+      setVerifyError('Please enter the full 6-digit code.');
+      return;
+    }
+
+    setIsVerifying(true);
+    setVerifyError(null);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/mfa/verify-setup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, token }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.message || 'Unable to verify 2FA code.');
+      }
+
+      setIsSuccess(true);
+      setTimeout(() => onComplete(), 1200);
+    } catch (error) {
+      setVerifyError(error instanceof Error ? error.message : 'Unable to verify 2FA code.');
+      setCode(['', '', '', '', '', '']);
+      setTimeout(() => inputRefs.current[0]?.focus(), 50);
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   const isFilled = code.every(d => d !== '');
@@ -297,13 +333,18 @@ export function EnableTwoFactorScreen({ userId, username, onComplete }: EnableTw
                   onChange={e => handleChange(index, e.target.value)}
                   onKeyDown={e => handleKeyDown(index, e)}
                   className={`w-11 text-center rounded-xl border-2 outline-none transition-all duration-200 ${digit
-                      ? 'border-[#3b82f6] bg-[#eff6ff] text-[#1e40af]'
-                      : 'border-[#e2e8f0] hover:border-[#93c5fd] bg-white text-[#0f172a]'
+                    ? 'border-[#3b82f6] bg-[#eff6ff] text-[#1e40af]'
+                    : 'border-[#e2e8f0] hover:border-[#93c5fd] bg-white text-[#0f172a]'
                     }`}
                   style={{ fontSize: '1.25rem', fontWeight: 700, height: '50px' }}
                 />
               ))}
             </div>
+            {verifyError && (
+              <div className="mt-3 text-center text-xs text-[#b91c1c] bg-[#fef2f2] border border-[#fecaca] rounded-xl px-3 py-2">
+                {verifyError}
+              </div>
+            )}
           </div>
 
           {/* Enable button */}
@@ -311,10 +352,10 @@ export function EnableTwoFactorScreen({ userId, username, onComplete }: EnableTw
             onClick={handleEnable}
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
-            disabled={!isFilled || !secretKey || isLoadingQr || isSuccess}
-            className={`w-full py-3.5 rounded-2xl text-white transition-all mb-4 shadow-[0_4px_16px_rgba(59,130,246,0.28)] ${isFilled && secretKey && !isLoadingQr
-                ? 'bg-[#3b82f6] hover:bg-[#2563eb]'
-                : 'bg-[#93c5fd] cursor-not-allowed'
+            disabled={!isFilled || !secretKey || isLoadingQr || isSuccess || isVerifying}
+            className={`w-full py-3.5 rounded-2xl text-white transition-all mb-4 shadow-[0_4px_16px_rgba(59,130,246,0.28)] ${isFilled && secretKey && !isLoadingQr && !isVerifying
+              ? 'bg-[#3b82f6] hover:bg-[#2563eb]'
+              : 'bg-[#93c5fd] cursor-not-allowed'
               }`}
             style={{ fontWeight: 600 }}
           >
@@ -324,7 +365,7 @@ export function EnableTwoFactorScreen({ userId, username, onComplete }: EnableTw
                   <Check className="w-5 h-5" /> 2FA Enabled Successfully!
                 </motion.span>
               ) : (
-                <motion.span key="default">Confirm & Enable 2FA</motion.span>
+                <motion.span key="default">{isVerifying ? 'Verifying…' : 'Confirm & Enable 2FA'}</motion.span>
               )}
             </AnimatePresence>
           </motion.button>

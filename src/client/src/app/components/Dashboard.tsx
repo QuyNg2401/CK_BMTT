@@ -11,6 +11,7 @@ import {
 
 interface DashboardProps {
   onLogout: () => void;
+  username?: string;
 }
 
 /* ── Seeded data ── */
@@ -26,39 +27,39 @@ const weeklyLogins = [
 ];
 
 const recentActivity = [
-  { device: 'MacBook Pro 16"', browser: 'Chrome 121', location: 'San Francisco, US', time: 'Just now',      status: 'success', icon: Monitor },
-  { device: 'iPhone 15 Pro',   browser: 'Safari 17',  location: 'San Francisco, US', time: '2 hours ago',  status: 'success', icon: Smartphone },
-  { device: 'Windows PC',      browser: 'Chrome 120', location: 'Austin, TX',        time: 'Yesterday',    status: 'success', icon: Monitor },
-  { device: 'Unknown device',  browser: 'Firefox 121',location: 'Moscow, RU',        time: '3 days ago',   status: 'blocked', icon: AlertCircle },
-  { device: 'iPad Pro 12.9"',  browser: 'Safari 17',  location: 'New York, US',      time: '5 days ago',   status: 'success', icon: Tablet },
-  { device: 'Linux Workstation',browser:'Firefox 120', location: 'Berlin, DE',        time: '1 week ago',   status: 'success', icon: Monitor },
+  { device: 'MacBook Pro 16"', browser: 'Chrome 121', location: 'San Francisco, US', time: 'Just now', status: 'success', icon: Monitor },
+  { device: 'iPhone 15 Pro', browser: 'Safari 17', location: 'San Francisco, US', time: '2 hours ago', status: 'success', icon: Smartphone },
+  { device: 'Windows PC', browser: 'Chrome 120', location: 'Austin, TX', time: 'Yesterday', status: 'success', icon: Monitor },
+  { device: 'Unknown device', browser: 'Firefox 121', location: 'Moscow, RU', time: '3 days ago', status: 'blocked', icon: AlertCircle },
+  { device: 'iPad Pro 12.9"', browser: 'Safari 17', location: 'New York, US', time: '5 days ago', status: 'success', icon: Tablet },
+  { device: 'Linux Workstation', browser: 'Firefox 120', location: 'Berlin, DE', time: '1 week ago', status: 'success', icon: Monitor },
 ];
 
 const trustedDevices = [
-  { name: 'MacBook Pro 16"', os: 'macOS Sonoma 14.3', lastSeen: 'Now',        icon: Laptop,    trusted: true,  online: true },
-  { name: 'iPhone 15 Pro',   os: 'iOS 17.3',          lastSeen: '2 hrs ago',  icon: Smartphone,trusted: true,  online: false },
-  { name: 'iPad Pro 12.9"',  os: 'iPadOS 17.2',       lastSeen: '5 days ago', icon: Tablet,    trusted: true,  online: false },
-  { name: 'Windows PC',      os: 'Windows 11 23H2',   lastSeen: 'Yesterday',  icon: Monitor,   trusted: false, online: false },
+  { name: 'MacBook Pro 16"', os: 'macOS Sonoma 14.3', lastSeen: 'Now', icon: Laptop, trusted: true, online: true },
+  { name: 'iPhone 15 Pro', os: 'iOS 17.3', lastSeen: '2 hrs ago', icon: Smartphone, trusted: true, online: false },
+  { name: 'iPad Pro 12.9"', os: 'iPadOS 17.2', lastSeen: '5 days ago', icon: Tablet, trusted: true, online: false },
+  { name: 'Windows PC', os: 'Windows 11 23H2', lastSeen: 'Yesterday', icon: Monitor, trusted: false, online: false },
 ];
 
 const securityAlerts = [
-  { type: 'blocked', msg: 'Blocked login attempt from Moscow, RU',   time: '3 days ago', color: '#ef4444', bg: '#fef2f2' },
-  { type: 'info',    msg: 'New device added: iPhone 15 Pro',         time: '1 week ago', color: '#3b82f6', bg: '#eff6ff' },
-  { type: 'success', msg: 'Password changed successfully',           time: '2 weeks ago',color: '#22c55e', bg: '#f0fdf4' },
+  { type: 'blocked', msg: 'Blocked login attempt from Moscow, RU', time: '3 days ago', color: '#ef4444', bg: '#fef2f2' },
+  { type: 'info', msg: 'New device added: iPhone 15 Pro', time: '1 week ago', color: '#3b82f6', bg: '#eff6ff' },
+  { type: 'success', msg: 'Password changed successfully', time: '2 weeks ago', color: '#22c55e', bg: '#f0fdf4' },
 ];
 
 const stats = [
-  { icon: Shield,      label: 'Security Score',     value: '98',  unit: '%', change: '+2%',   positive: true,  bg: '#eff6ff', color: '#3b82f6', desc: 'Excellent' },
-  { icon: CheckCircle, label: 'Verified Sessions',  value: '24',  unit: '',  change: '+8',    positive: true,  bg: '#f0fdf4', color: '#22c55e', desc: 'This month' },
-  { icon: Activity,    label: 'Threats Blocked',    value: '3',   unit: '',  change: '-5',    positive: true,  bg: '#faf5ff', color: '#a855f7', desc: 'This month' },
-  { icon: Smartphone,  label: 'Trusted Devices',    value: '3',   unit: '',  change: '+1',    positive: true,  bg: '#fff7ed', color: '#f97316', desc: 'Active' },
+  { icon: Shield, label: 'Security Score', value: '98', unit: '%', change: '+2%', positive: true, bg: '#eff6ff', color: '#3b82f6', desc: 'Excellent' },
+  { icon: CheckCircle, label: 'Verified Sessions', value: '24', unit: '', change: '+8', positive: true, bg: '#f0fdf4', color: '#22c55e', desc: 'This month' },
+  { icon: Activity, label: 'Threats Blocked', value: '3', unit: '', change: '-5', positive: true, bg: '#faf5ff', color: '#a855f7', desc: 'This month' },
+  { icon: Smartphone, label: 'Trusted Devices', value: '3', unit: '', change: '+1', positive: true, bg: '#fff7ed', color: '#f97316', desc: 'Active' },
 ];
 
 const securityChecklist = [
   { text: 'Two-factor authentication is active', done: true },
-  { text: 'Recovery codes saved',                done: true },
-  { text: 'Backup email configured',             done: true },
-  { text: 'Hardware security key not added',     done: false },
+  { text: 'Recovery codes saved', done: true },
+  { text: 'Backup email configured', done: true },
+  { text: 'Hardware security key not added', done: false },
 ];
 
 /* ── Custom tooltip for chart ── */
@@ -74,10 +75,25 @@ function CustomTooltip({ active, payload, label }: any) {
 }
 
 /* ── Component ── */
-export function Dashboard({ onLogout }: DashboardProps) {
+const getDisplayName = (value?: string) => {
+  if (!value) return 'User';
+  const name = value.split('@')[0].trim();
+  return name || value;
+};
+
+const getInitials = (value?: string) => {
+  const name = getDisplayName(value);
+  const parts = name.split(/[._\-\s]+/).filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+};
+
+export function Dashboard({ onLogout, username }: DashboardProps) {
   const [showBanner, setShowBanner] = useState(true);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [activeTab, setActiveTab] = useState<'activity' | 'devices' | 'alerts'>('activity');
+  const displayName = getDisplayName(username);
+  const initials = getInitials(username);
 
   return (
     <div className="min-h-screen bg-[#f0f6ff]">
@@ -100,9 +116,8 @@ export function Dashboard({ onLogout }: DashboardProps) {
             {['Dashboard', 'Security', 'Devices', 'Activity'].map((item, i) => (
               <button
                 key={item}
-                className={`px-4 py-2 rounded-xl text-sm transition-all ${
-                  i === 0 ? 'bg-[#eff6ff] text-[#3b82f6]' : 'text-[#64748b] hover:text-[#1e293b] hover:bg-[#f8fafc]'
-                }`}
+                className={`px-4 py-2 rounded-xl text-sm transition-all ${i === 0 ? 'bg-[#eff6ff] text-[#3b82f6]' : 'text-[#64748b] hover:text-[#1e293b] hover:bg-[#f8fafc]'
+                  }`}
                 style={{ fontWeight: i === 0 ? 600 : 500 }}
               >
                 {item}
@@ -125,9 +140,9 @@ export function Dashboard({ onLogout }: DashboardProps) {
                 className="flex items-center gap-2.5 bg-[#f8fafc] hover:bg-[#f1f5f9] border border-[#e2e8f0] rounded-xl pl-1 pr-3 py-1 transition-all"
               >
                 <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#3b82f6] to-[#6366f1] flex items-center justify-center">
-                  <span className="text-white text-xs" style={{ fontWeight: 700 }}>JS</span>
+                  <span className="text-white text-xs" style={{ fontWeight: 700 }}>{initials}</span>
                 </div>
-                <span className="text-[#374151] text-sm" style={{ fontWeight: 500 }}>Jane S.</span>
+                <span className="text-[#374151] text-sm" style={{ fontWeight: 500 }}>{displayName}</span>
               </button>
 
               <AnimatePresence>
@@ -140,8 +155,8 @@ export function Dashboard({ onLogout }: DashboardProps) {
                     className="absolute right-0 top-full mt-2 w-56 bg-white rounded-2xl shadow-[0_16px_48px_rgba(0,0,0,0.12)] border border-[#f1f5f9] overflow-hidden z-50"
                   >
                     <div className="px-4 py-3 border-b border-[#f1f5f9]">
-                      <p className="text-[#0f172a] text-sm" style={{ fontWeight: 600 }}>Jane Smith</p>
-                      <p className="text-[#94a3b8] text-xs">jane.smith@secureauth.io</p>
+                      <p className="text-[#0f172a] text-sm" style={{ fontWeight: 600 }}>{displayName}</p>
+                      <p className="text-[#94a3b8] text-xs">{username || 'unknown'}</p>
                       <div className="flex items-center gap-1.5 mt-1.5 bg-[#f0fdf4] rounded-lg px-2 py-1 w-fit">
                         <Shield className="w-3 h-3 text-[#22c55e]" />
                         <span className="text-[#16a34a] text-xs" style={{ fontWeight: 600 }}>2FA Active</span>
@@ -190,7 +205,7 @@ export function Dashboard({ onLogout }: DashboardProps) {
                   <div>
                     <p className="text-[#166534] text-sm" style={{ fontWeight: 600 }}>Login successful — 2FA verified</p>
                     <p className="text-[#4ade80] text-xs mt-0.5">
-                      Welcome back, Jane · MacBook Pro 16" · Chrome 121 · San Francisco, US · Just now
+                      Welcome back, {displayName} · Session active · Just now
                     </p>
                   </div>
                 </div>
@@ -271,7 +286,7 @@ export function Dashboard({ onLogout }: DashboardProps) {
                   <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8' }} />
                   <YAxis hide />
                   <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
-                  <Bar dataKey="logins"  fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="logins" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="blocked" fill="#fca5a5" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -329,11 +344,10 @@ export function Dashboard({ onLogout }: DashboardProps) {
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`px-4 py-2 rounded-t-xl text-sm capitalize transition-all -mb-px ${
-                    activeTab === tab
+                  className={`px-4 py-2 rounded-t-xl text-sm capitalize transition-all -mb-px ${activeTab === tab
                       ? 'bg-[#eff6ff] text-[#3b82f6] border-b-2 border-[#3b82f6]'
                       : 'text-[#64748b] hover:text-[#1e293b]'
-                  }`}
+                    }`}
                   style={{ fontWeight: activeTab === tab ? 600 : 400 }}
                 >
                   {tab === 'activity' ? 'Login Activity' : tab === 'devices' ? 'Devices' : 'Alerts'}
@@ -466,9 +480,9 @@ export function Dashboard({ onLogout }: DashboardProps) {
             <div className="mt-5 pt-4 border-t border-[#f1f5f9] space-y-2">
               <p className="text-[#64748b] text-xs uppercase tracking-wider mb-2" style={{ fontWeight: 600 }}>Account</p>
               {[
-                { label: 'Name',    value: 'Jane Smith' },
-                { label: 'Email',   value: 'jane.smith@secureauth.io' },
-                { label: 'Plan',    value: 'Free' },
+                { label: 'Name', value: 'Jane Smith' },
+                { label: 'Email', value: 'jane.smith@secureauth.io' },
+                { label: 'Plan', value: 'Free' },
                 { label: 'Member since', value: 'Apr 18, 2025' },
               ].map(({ label, value }) => (
                 <div key={label} className="flex justify-between items-center">

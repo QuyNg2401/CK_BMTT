@@ -1,33 +1,39 @@
 import { ArrowLeft, ShieldCheck, RefreshCw, Smartphone, Monitor, MapPin, Clock } from 'lucide-react';
-import { useState, useRef, KeyboardEvent, useEffect } from 'react';
+import { useState, useRef, KeyboardEvent, useEffect, ClipboardEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface TwoFactorScreenProps {
   onBack: () => void;
-  onVerified: () => void;
+  onVerified: (session: { userId: number; username: string; accessToken: string }) => void;
+  userId: number | null;
+  username: string;
 }
 
 const TOTAL_SECONDS = 60;
 const RADIUS = 36;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-const LOGIN_CONTEXT = {
-  user: 'Jane Smith',
-  email: 'jane.smith@secureauth.io',
-  device: 'MacBook Pro 16"',
-  browser: 'Chrome 121',
-  os: 'macOS Sonoma',
-  location: 'San Francisco, CA',
-  ip: '104.28.112.47',
-  time: 'Just now',
+const getInitials = (value: string) => {
+  const base = value.split('@')[0].trim();
+  if (!base) return 'U';
+  const parts = base.split(/[._\-\s]+/).filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 };
 
-export function TwoFactorScreen({ onBack, onVerified }: TwoFactorScreenProps) {
+export function TwoFactorScreen({ onBack, onVerified, userId, username }: TwoFactorScreenProps) {
+  console.log('[TwoFactorScreen] Mounted with props:', { userId, username });
+
+  const API_BASE_URL =
+    (import.meta as { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL ||
+    'http://localhost:3000';
+
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [hasError, setHasError] = useState(false);
-  const [attemptCount, setAttemptCount] = useState(0);
   const [timeLeft, setTimeLeft] = useState(TOTAL_SECONDS);
   const [isResending, setIsResending] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
@@ -41,6 +47,7 @@ export function TwoFactorScreen({ onBack, onVerified }: TwoFactorScreenProps) {
     setTimeLeft(TOTAL_SECONDS);
     setCode(['', '', '', '', '', '']);
     setHasError(false);
+    setApiError(null);
     setTimeout(() => setIsResending(false), 1000);
     inputRefs.current[0]?.focus();
   };
@@ -51,6 +58,7 @@ export function TwoFactorScreen({ onBack, onVerified }: TwoFactorScreenProps) {
     newCode[index] = value.slice(-1);
     setCode(newCode);
     setHasError(false);
+    setApiError(null);
     if (value && index < 5) inputRefs.current[index + 1]?.focus();
   };
 
@@ -60,7 +68,7 @@ export function TwoFactorScreen({ onBack, onVerified }: TwoFactorScreenProps) {
     }
   };
 
-  const handlePaste = (e: React.ClipboardEvent) => {
+  const handlePaste = (e: ClipboardEvent) => {
     e.preventDefault();
     const pasted = e.clipboardData.getData('text').slice(0, 6);
     if (!/^\d+$/.test(pasted)) return;
@@ -68,20 +76,68 @@ export function TwoFactorScreen({ onBack, onVerified }: TwoFactorScreenProps) {
     pasted.split('').forEach((char, i) => { if (i < 6) newCode[i] = char; });
     setCode(newCode);
     setHasError(false);
+    setApiError(null);
     const nextEmpty = newCode.findIndex(v => !v);
     inputRefs.current[nextEmpty !== -1 ? nextEmpty : 5]?.focus();
   };
 
-  const handleVerify = () => {
-    const newCount = attemptCount + 1;
-    setAttemptCount(newCount);
-    if (newCount === 1) {
+  const handleVerify = async () => {
+    if (!userId) {
       setHasError(true);
+      setApiError('Missing login session. Please sign in again.');
+      return;
+    }
+
+    const token = code.join('');
+    if (token.length !== 6) {
+      setHasError(true);
+      setApiError('Please enter the full 6-digit code.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setHasError(false);
+    setApiError(null);
+
+    try {
+      const payload_body = { userId, token };
+      console.log('[TwoFactorScreen] Submitting OTP:', { userId, token: '***' });
+
+      const response = await fetch(`${API_BASE_URL}/auth/verify-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload_body),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      console.log('[TwoFactorScreen] Verify response:', { status: response.status, payload });
+
+      if (!response.ok) {
+        throw new Error(payload?.message || 'Unable to verify code.');
+      }
+
+      const result = payload?.data ?? payload;
+      if (
+        !result ||
+        typeof result.userId !== 'number' ||
+        typeof result.username !== 'string' ||
+        typeof result.accessToken !== 'string'
+      ) {
+        throw new Error('Invalid response from server.');
+      }
+
+      onVerified({
+        userId: result.userId,
+        username: result.username,
+        accessToken: result.accessToken,
+      });
+    } catch (error) {
+      setHasError(true);
+      setApiError(error instanceof Error ? error.message : 'Unable to verify code.');
       setCode(['', '', '', '', '', '']);
       setTimeout(() => inputRefs.current[0]?.focus(), 50);
-    } else {
-      setHasError(false);
-      onVerified();
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -89,6 +145,8 @@ export function TwoFactorScreen({ onBack, onVerified }: TwoFactorScreenProps) {
   const strokeDashoffset = CIRCUMFERENCE * (1 - progress);
   const timerColor = timeLeft > 20 ? '#3b82f6' : timeLeft > 10 ? '#f59e0b' : '#ef4444';
   const isFilled = code.every(d => d !== '');
+  const displayName = username?.split('@')[0] || 'User';
+  const initials = getInitials(username || 'User');
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#f0f6ff] p-6">
@@ -135,33 +193,33 @@ export function TwoFactorScreen({ onBack, onVerified }: TwoFactorScreenProps) {
             </p>
             <div className="flex items-center gap-3 mb-3">
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#3b82f6] to-[#6366f1] flex items-center justify-center flex-shrink-0">
-                <span className="text-white text-sm" style={{ fontWeight: 700 }}>JS</span>
+                <span className="text-white text-sm" style={{ fontWeight: 700 }}>{initials}</span>
               </div>
               <div>
-                <p className="text-[#0f172a] text-sm" style={{ fontWeight: 600 }}>{LOGIN_CONTEXT.user}</p>
-                <p className="text-[#94a3b8] text-xs">{LOGIN_CONTEXT.email}</p>
+                <p className="text-[#0f172a] text-sm" style={{ fontWeight: 600 }}>{displayName}</p>
+                <p className="text-[#94a3b8] text-xs">{username}</p>
               </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div className="flex items-start gap-1.5">
                 <Monitor className="w-3.5 h-3.5 text-[#94a3b8] mt-0.5 flex-shrink-0" />
                 <div>
-                  <p className="text-[#64748b] text-xs" style={{ fontWeight: 500 }}>{LOGIN_CONTEXT.device}</p>
-                  <p className="text-[#94a3b8] text-xs">{LOGIN_CONTEXT.browser}</p>
+                  <p className="text-[#64748b] text-xs" style={{ fontWeight: 500 }}>Desktop device</p>
+                  <p className="text-[#94a3b8] text-xs">Chrome</p>
                 </div>
               </div>
               <div className="flex items-start gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-[#94a3b8] mt-0.5 flex-shrink-0" />
                 <div>
-                  <p className="text-[#64748b] text-xs" style={{ fontWeight: 500 }}>{LOGIN_CONTEXT.location}</p>
-                  <p className="text-[#94a3b8] text-xs">{LOGIN_CONTEXT.ip}</p>
+                  <p className="text-[#64748b] text-xs" style={{ fontWeight: 500 }}>Current location</p>
+                  <p className="text-[#94a3b8] text-xs">IP hidden</p>
                 </div>
               </div>
               <div className="flex items-start gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-[#94a3b8] mt-0.5 flex-shrink-0" />
                 <div>
-                  <p className="text-[#64748b] text-xs" style={{ fontWeight: 500 }}>{LOGIN_CONTEXT.time}</p>
-                  <p className="text-[#94a3b8] text-xs">{LOGIN_CONTEXT.os}</p>
+                  <p className="text-[#64748b] text-xs" style={{ fontWeight: 500 }}>Just now</p>
+                  <p className="text-[#94a3b8] text-xs">Session active</p>
                 </div>
               </div>
             </div>
@@ -200,13 +258,12 @@ export function TwoFactorScreen({ onBack, onVerified }: TwoFactorScreenProps) {
                   onKeyDown={e => handleKeyDown(index, e)}
                   animate={hasError ? { x: [0, -6, 6, -4, 4, 0] } : {}}
                   transition={{ duration: 0.4 }}
-                  className={`w-12 h-14 text-center rounded-2xl border-2 outline-none transition-all duration-200 text-[#0f172a] ${
-                    hasError
-                      ? 'border-[#fca5a5] bg-[#fff5f5] shadow-[0_0_0_3px_rgba(252,165,165,0.2)]'
-                      : digit
+                  className={`w-12 h-14 text-center rounded-2xl border-2 outline-none transition-all duration-200 text-[#0f172a] ${hasError
+                    ? 'border-[#fca5a5] bg-[#fff5f5] shadow-[0_0_0_3px_rgba(252,165,165,0.2)]'
+                    : digit
                       ? 'border-[#3b82f6] bg-[#eff6ff] shadow-[0_0_0_3px_rgba(59,130,246,0.12)]'
                       : 'border-[#e2e8f0] bg-white hover:border-[#93c5fd]'
-                  }`}
+                    }`}
                   style={{ fontSize: '1.375rem', fontWeight: 700 }}
                 />
               ))}
@@ -223,8 +280,7 @@ export function TwoFactorScreen({ onBack, onVerified }: TwoFactorScreenProps) {
                   <div className="flex items-center justify-center gap-2 bg-[#fef2f2] border border-[#fecaca] rounded-xl px-4 py-2.5">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#ef4444]" />
                     <p className="text-[#dc2626] text-sm">
-                      Invalid or expired code.{' '}
-                      <span className="underline cursor-pointer">Try again →</span>
+                      {apiError || 'Invalid or expired code.'}
                     </p>
                   </div>
                 </motion.div>
@@ -274,27 +330,15 @@ export function TwoFactorScreen({ onBack, onVerified }: TwoFactorScreenProps) {
             onClick={handleVerify}
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
-            className={`w-full py-3.5 rounded-2xl text-white transition-all duration-200 shadow-[0_4px_16px_rgba(59,130,246,0.3)] ${
-              isFilled
-                ? 'bg-[#3b82f6] hover:bg-[#2563eb]'
-                : 'bg-[#93c5fd] cursor-not-allowed'
-            }`}
+            disabled={!isFilled || isSubmitting}
+            className={`w-full py-3.5 rounded-2xl text-white transition-all duration-200 shadow-[0_4px_16px_rgba(59,130,246,0.3)] ${isFilled && !isSubmitting
+              ? 'bg-[#3b82f6] hover:bg-[#2563eb]'
+              : 'bg-[#93c5fd] cursor-not-allowed'
+              }`}
             style={{ fontWeight: 600 }}
           >
-            Verify & Continue
+            {isSubmitting ? 'Verifying…' : 'Verify & Continue'}
           </motion.button>
-
-          <AnimatePresence>
-            {hasError && attemptCount >= 1 && (
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-center text-[#94a3b8] text-xs mt-3"
-              >
-                Demo: click verify again to access the dashboard →
-              </motion.p>
-            )}
-          </AnimatePresence>
 
           <div className="mt-4 text-center">
             <button className="text-[#94a3b8] text-xs hover:text-[#64748b] transition-colors">
