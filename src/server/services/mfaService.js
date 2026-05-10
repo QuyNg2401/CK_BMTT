@@ -6,6 +6,8 @@ const createUserRepo = require("../repositories/user.repository");
 const createMfaLogRepo = require("../repositories/mfa_log.repository");
 
 const otplib = require("otplib");
+
+const { encrypt, decrypt } = require("../utilities/encryption");
 // Khởi tạo Repository
 const userRepo = createUserRepo(db);
 const mfaLogRepo = createMfaLogRepo(db);
@@ -78,7 +80,9 @@ const MfaService = {
       issuer,
     });
 
-    const updated = await userRepo.updateMfaSecret(userId, secretBase32);
+    const encryptedSecret = encrypt(secretBase32);
+
+    const updated = await userRepo.updateMfaSecret(userId, encryptedSecret);
     if (!updated) {
       throw new Error("Failed to save mfa secret");
     }
@@ -97,10 +101,11 @@ const MfaService = {
     if (!user.mfa_secret) {
       throw new Error("user này chưa bật 2FA");
     }
+    const decryptedSecret = decrypt(user.mfa_secret);
 
     await enforceMfaLockout(userId);
 
-    const isValid = verifyTotp(token, user.mfa_secret);
+    const isValid = verifyTotp(token, decryptedSecret);
     try {
       await mfaLogRepo.saveLog(userId, ipAddress, isValid);
     } catch (logError) {

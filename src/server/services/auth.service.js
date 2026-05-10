@@ -5,6 +5,8 @@ const db = require('../configs/connectDB');
 const createUserRepo = require('../repositories/user.repository');
 const createMfaLogRepo = require('../repositories/mfa_log.repository');
 
+const { decrypt } = require("../utilities/encryption");
+
 // Khởi tạo Repository
 const userRepo = createUserRepo(db);
 const mfaLogRepo = createMfaLogRepo(db);
@@ -48,7 +50,7 @@ const enforceMfaLockout = async (userId) => {
 };
 
 const AuthService = {
-    register: async(username, password) => {
+    register: async (username, password) => {
         const existingUser = await userRepo.findByUsername(username);
         if (existingUser) throw new Error('The username already exists');
 
@@ -58,7 +60,7 @@ const AuthService = {
         return await userRepo.insertUser(username, passwordHash);
     },
 
-    loginStep1: async(username, password) => {
+    loginStep1: async (username, password) => {
         const user = await userRepo.getCredentialsByUsername(username);
         if (!user) throw new Error('Incorrect username, or password');
 
@@ -106,8 +108,9 @@ const AuthService = {
         }
 
         await enforceMfaLockout(userId);
+        const decryptedSecret = decrypt(user.mfa_secret);
 
-        const isValid = verifyTotp(token.trim(), user.mfa_secret);
+        const isValid = verifyTotp(token.trim(), decryptedSecret);
         try {
             await mfaLogRepo.saveLog(userId, ipAddress, isValid);
         } catch (logError) {
