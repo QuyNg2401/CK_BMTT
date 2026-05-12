@@ -52,6 +52,22 @@ const createMfaLogRepository = (db) => {
                 [userId, minutes]
             );
             return rows[0].total;
+        },
+
+        getFailedAttemptStats: async (userId, minutes = 15) => {
+            const columnName = await resolveUserIdColumn();
+            const [rows] = await db.query(
+                `SELECT COUNT(*) as total, MIN(attempt_time) as oldest_attempt
+                FROM mfa_logs
+                WHERE ${columnName} = ?
+                AND is_success = 0
+                AND attempt_time >= NOW() - INTERVAL ? MINUTE`,
+                [userId, minutes]
+            );
+            return {
+                total: rows[0].total,
+                oldestAttempt: rows[0].oldest_attempt || null,
+            };
         }
     };
 };

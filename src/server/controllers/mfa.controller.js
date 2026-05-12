@@ -79,6 +79,20 @@ const MfaController = {
       }
     } catch (error) {
       console.log("LỖI CHI TIẾT:", error);
+      if (error?.code === 'OTP_LOCKED') {
+        return res.status(429).json({
+          message: error.message,
+          remainingAttempts: error.remainingAttempts ?? 0,
+          retryAfterSeconds: error.retryAfterSeconds ?? 0,
+        });
+      }
+      if (error?.code === 'OTP_INVALID' || error?.code === 'OTP_REPLAY') {
+        return res.status(400).json({
+          message: error.message,
+          remainingAttempts: error.remainingAttempts ?? 0,
+          retryAfterSeconds: 0,
+        });
+      }
       return res.status(500).json({
         message: error.message
       })

@@ -4,8 +4,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../configs/connectDB');
 const createUserRepo = require('../repositories/user.repository');
 const createMfaLogRepo = require('../repositories/mfa_log.repository');
-
-const { decrypt } = require("../utilities/encryption");
+const { decrypt } = require('../utilities/encryption');
 
 // Khởi tạo Repository
 const userRepo = createUserRepo(db);
@@ -15,6 +14,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev_jwt_secret';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
 const MFA_FAILED_WINDOW_MINUTES = 15;
 const MFA_MAX_FAILED_ATTEMPTS = 5;
+const TOTP_STEP_SECONDS = 30;
 
 const verifyTotp = (token, secret) => {
     if (typeof otplib.verifySync !== 'function') {
@@ -42,15 +42,38 @@ const createAccessToken = (user) => {
     );
 };
 
+const buildOtpError = (code, message, remainingAttempts, retryAfterSeconds) => {
+    const error = new Error(message);
+    error.code = code;
+    error.remainingAttempts = remainingAttempts;
+    error.retryAfterSeconds = retryAfterSeconds;
+    return error;
+};
+
+const getRetryAfterSeconds = (oldestAttempt) => {
+    if (!oldestAttempt) return MFA_FAILED_WINDOW_MINUTES * 60;
+    const elapsedSeconds = Math.floor((Date.now() - new Date(oldestAttempt).getTime()) / 1000);
+    return Math.max(0, MFA_FAILED_WINDOW_MINUTES * 60 - elapsedSeconds);
+};
+
+const getCurrentTotpStep = () => Math.floor(Date.now() / 1000 / TOTP_STEP_SECONDS);
+
 const enforceMfaLockout = async (userId) => {
-    const failedCount = await mfaLogRepo.countFailedAttempts(userId, MFA_FAILED_WINDOW_MINUTES);
-    if (failedCount >= MFA_MAX_FAILED_ATTEMPTS) {
-        throw new Error(`Too many failed attempts. Try again in ${MFA_FAILED_WINDOW_MINUTES} minutes.`);
+    const stats = await mfaLogRepo.getFailedAttemptStats(userId, MFA_FAILED_WINDOW_MINUTES);
+    if (stats.total >= MFA_MAX_FAILED_ATTEMPTS) {
+        const retryAfterSeconds = getRetryAfterSeconds(stats.oldestAttempt);
+        throw buildOtpError(
+            'OTP_LOCKED',
+            `Too many failed attempts. Try again in ${MFA_FAILED_WINDOW_MINUTES} minutes.`,
+            0,
+            retryAfterSeconds
+        );
     }
+    return stats;
 };
 
 const AuthService = {
-    register: async (username, password) => {
+    register: async(username, password) => {
         const existingUser = await userRepo.findByUsername(username);
         if (existingUser) throw new Error('The username already exists');
 
@@ -60,7 +83,7 @@ const AuthService = {
         return await userRepo.insertUser(username, passwordHash);
     },
 
-    loginStep1: async (username, password) => {
+    loginStep1: async(username, password) => {
         const user = await userRepo.getCredentialsByUsername(username);
         if (!user) throw new Error('Incorrect username, or password');
 
@@ -107,16 +130,55 @@ const AuthService = {
             throw new Error('MFA is not enabled for this user');
         }
 
-        await enforceMfaLockout(userId);
-        const decryptedSecret = decrypt(user.mfa_secret);
+        const failedStats = await enforceMfaLockout(userId);
 
+        const currentStep = getCurrentTotpStep();
+        const lastUsedStep = user.mfa_last_used_step == null ? null : Number(user.mfa_last_used_step);
+        if (lastUsedStep !== null && lastUsedStep === currentStep) {
+            const remainingAttempts = Math.max(0, MFA_MAX_FAILED_ATTEMPTS - (failedStats.total + 1));
+            try {
+                await mfaLogRepo.saveLog(userId, ipAddress, false);
+            } catch (logError) {
+                console.warn('[AuthService.verifyLoginStep2] Failed to log MFA attempt:', logError.message);
+            }
+            if (remainingAttempts === 0) {
+                const retryAfterSeconds = getRetryAfterSeconds(failedStats.oldestAttempt);
+                throw buildOtpError(
+                    'OTP_LOCKED',
+                    `Too many failed attempts. Try again in ${MFA_FAILED_WINDOW_MINUTES} minutes.`,
+                    0,
+                    retryAfterSeconds
+                );
+            }
+            throw buildOtpError('OTP_REPLAY', 'OTP already used. Wait for next code.', remainingAttempts, 0);
+        }
+
+        const decryptedSecret = decrypt(user.mfa_secret);
         const isValid = verifyTotp(token.trim(), decryptedSecret);
         try {
             await mfaLogRepo.saveLog(userId, ipAddress, isValid);
         } catch (logError) {
             console.warn('[AuthService.verifyLoginStep2] Failed to log MFA attempt:', logError.message);
         }
-        if (!isValid) throw new Error('Invalid or expired OTP');
+        if (!isValid) {
+            const remainingAttempts = Math.max(0, MFA_MAX_FAILED_ATTEMPTS - (failedStats.total + 1));
+            if (remainingAttempts === 0) {
+                const retryAfterSeconds = getRetryAfterSeconds(failedStats.oldestAttempt);
+                throw buildOtpError(
+                    'OTP_LOCKED',
+                    `Too many failed attempts. Try again in ${MFA_FAILED_WINDOW_MINUTES} minutes.`,
+                    0,
+                    retryAfterSeconds
+                );
+            }
+            throw buildOtpError('OTP_INVALID', 'Invalid or expired OTP', remainingAttempts, 0);
+        }
+
+        try {
+            await userRepo.updateMfaLastUsedStep(userId, currentStep);
+        } catch (updateError) {
+            console.warn('[AuthService.verifyLoginStep2] Failed to update last used step:', updateError.message);
+        }
 
         const accessToken = createAccessToken(user);
 

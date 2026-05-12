@@ -41,8 +41,16 @@ const createUserRepository = (db) => {
 
         updateMfaSecret: async (userId, secret) => {
             const [result] = await db.query(
-                'UPDATE users SET mfa_secret = ? WHERE id = ?',
+                'UPDATE users SET mfa_secret = ?, mfa_last_used_step = NULL WHERE id = ?',
                 [secret, userId]
+            );
+            return result.affectedRows > 0;
+        },
+
+        updateMfaLastUsedStep: async (userId, step) => {
+            const [result] = await db.query(
+                'UPDATE users SET mfa_last_used_step = ? WHERE id = ?',
+                [step, userId]
             );
             return result.affectedRows > 0;
         },
@@ -58,7 +66,7 @@ const createUserRepository = (db) => {
         // Hàm reset khi user muốn tắt 2FA
         disableMfa: async (userId) => {
             const [result] = await db.query(
-                'UPDATE users SET mfa_enabled = 0, mfa_secret = NULL WHERE id = ?',
+                'UPDATE users SET mfa_enabled = 0, mfa_secret = NULL, mfa_last_used_step = NULL WHERE id = ?',
                 [userId]
             );
             return result.affectedRows > 0;

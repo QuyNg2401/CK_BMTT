@@ -9,10 +9,6 @@ interface TwoFactorScreenProps {
   username: string;
 }
 
-const TOTAL_SECONDS = 60;
-const RADIUS = 36;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-
 const getInitials = (value: string) => {
   const base = value.split('@')[0].trim();
   if (!base) return 'U';
@@ -30,24 +26,41 @@ export function TwoFactorScreen({ onBack, onVerified, userId, username }: TwoFac
 
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [hasError, setHasError] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(TOTAL_SECONDS);
   const [isResending, setIsResending] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [remainingAttempts, setRemainingAttempts] = useState<number | null>(null);
+  const [retryUntil, setRetryUntil] = useState<number | null>(null);
+  const [retrySecondsLeft, setRetrySecondsLeft] = useState(0);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
-    if (timeLeft <= 0) return;
-    const timer = setTimeout(() => setTimeLeft(t => t - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [timeLeft]);
+    if (!retryUntil) {
+      setRetrySecondsLeft(0);
+      return;
+    }
+    const tick = () => {
+      const secondsLeft = Math.max(0, Math.ceil((retryUntil - Date.now()) / 1000));
+      setRetrySecondsLeft(secondsLeft);
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [retryUntil]);
+
+  const formatCountdown = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   const handleResend = () => {
     setIsResending(true);
-    setTimeLeft(TOTAL_SECONDS);
     setCode(['', '', '', '', '', '']);
     setHasError(false);
     setApiError(null);
+    setRemainingAttempts(null);
+    setRetryUntil(null);
     setTimeout(() => setIsResending(false), 1000);
     inputRefs.current[0]?.focus();
   };
@@ -59,6 +72,8 @@ export function TwoFactorScreen({ onBack, onVerified, userId, username }: TwoFac
     setCode(newCode);
     setHasError(false);
     setApiError(null);
+    setRemainingAttempts(null);
+    setRetryUntil(null);
     if (value && index < 5) inputRefs.current[index + 1]?.focus();
   };
 
@@ -77,6 +92,8 @@ export function TwoFactorScreen({ onBack, onVerified, userId, username }: TwoFac
     setCode(newCode);
     setHasError(false);
     setApiError(null);
+    setRemainingAttempts(null);
+    setRetryUntil(null);
     const nextEmpty = newCode.findIndex(v => !v);
     inputRefs.current[nextEmpty !== -1 ? nextEmpty : 5]?.focus();
   };
@@ -85,6 +102,12 @@ export function TwoFactorScreen({ onBack, onVerified, userId, username }: TwoFac
     if (!userId) {
       setHasError(true);
       setApiError('Missing login session. Please sign in again.');
+      return;
+    }
+
+    if (retrySecondsLeft > 0) {
+      setHasError(true);
+      setApiError(`Too many attempts. Try again in ${formatCountdown(retrySecondsLeft)}.`);
       return;
     }
 
@@ -98,6 +121,7 @@ export function TwoFactorScreen({ onBack, onVerified, userId, username }: TwoFac
     setIsSubmitting(true);
     setHasError(false);
     setApiError(null);
+    setRemainingAttempts(null);
 
     try {
       const payload_body = { userId, token };
@@ -113,6 +137,14 @@ export function TwoFactorScreen({ onBack, onVerified, userId, username }: TwoFac
       console.log('[TwoFactorScreen] Verify response:', { status: response.status, payload });
 
       if (!response.ok) {
+        const attemptsLeft = typeof payload?.remainingAttempts === 'number' ? payload.remainingAttempts : null;
+        const retryAfter = typeof payload?.retryAfterSeconds === 'number' ? payload.retryAfterSeconds : 0;
+        if (attemptsLeft !== null) {
+          setRemainingAttempts(attemptsLeft);
+        }
+        if (retryAfter > 0) {
+          setRetryUntil(Date.now() + retryAfter * 1000);
+        }
         throw new Error(payload?.message || 'Unable to verify code.');
       }
 
@@ -141,10 +173,8 @@ export function TwoFactorScreen({ onBack, onVerified, userId, username }: TwoFac
     }
   };
 
-  const progress = timeLeft / TOTAL_SECONDS;
-  const strokeDashoffset = CIRCUMFERENCE * (1 - progress);
-  const timerColor = timeLeft > 20 ? '#3b82f6' : timeLeft > 10 ? '#f59e0b' : '#ef4444';
   const isFilled = code.every(d => d !== '');
+  const isLocked = retrySecondsLeft > 0;
   const displayName = username?.split('@')[0] || 'User';
   const initials = getInitials(username || 'User');
 
@@ -286,34 +316,19 @@ export function TwoFactorScreen({ onBack, onVerified, userId, username }: TwoFac
                 </motion.div>
               )}
             </AnimatePresence>
+            {typeof remainingAttempts === 'number' && !isLocked && (
+              <div className="mt-2 text-center text-xs text-[#b45309]">
+                Remaining attempts: {remainingAttempts}
+              </div>
+            )}
+            {isLocked && (
+              <div className="mt-2 text-center text-xs text-[#b45309]">
+                Try again in {formatCountdown(retrySecondsLeft)}
+              </div>
+            )}
           </div>
 
-          {/* Timer + resend row */}
-          <div className="flex items-center justify-between mb-6 px-1">
-            <div className="flex items-center gap-2">
-              <div className="relative w-10 h-10">
-                <svg className="w-10 h-10 transform -rotate-90" viewBox="0 0 40 40">
-                  <circle cx="20" cy="20" r="16" stroke="#f1f5f9" strokeWidth="3" fill="none" />
-                  <circle
-                    cx="20" cy="20" r="16"
-                    stroke={timerColor}
-                    strokeWidth="3"
-                    fill="none"
-                    strokeDasharray={2 * Math.PI * 16}
-                    strokeDashoffset={2 * Math.PI * 16 * (1 - progress)}
-                    strokeLinecap="round"
-                    style={{ transition: 'stroke-dashoffset 1s linear, stroke 0.5s ease' }}
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span style={{ fontSize: '9px', fontWeight: 700, color: timerColor }}>{timeLeft}</span>
-                </div>
-              </div>
-              <div>
-                <p className="text-[#0f172a] text-xs" style={{ fontWeight: 600 }}>Code expires in {timeLeft}s</p>
-                <p className="text-[#94a3b8] text-xs">New code every 30 seconds</p>
-              </div>
-            </div>
+          <div className="flex justify-end mb-6 px-1">
             <button
               onClick={handleResend}
               disabled={isResending}
@@ -330,14 +345,14 @@ export function TwoFactorScreen({ onBack, onVerified, userId, username }: TwoFac
             onClick={handleVerify}
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
-            disabled={!isFilled || isSubmitting}
-            className={`w-full py-3.5 rounded-2xl text-white transition-all duration-200 shadow-[0_4px_16px_rgba(59,130,246,0.3)] ${isFilled && !isSubmitting
+            disabled={!isFilled || isSubmitting || isLocked}
+            className={`w-full py-3.5 rounded-2xl text-white transition-all duration-200 shadow-[0_4px_16px_rgba(59,130,246,0.3)] ${isFilled && !isSubmitting && !isLocked
               ? 'bg-[#3b82f6] hover:bg-[#2563eb]'
               : 'bg-[#93c5fd] cursor-not-allowed'
               }`}
             style={{ fontWeight: 600 }}
           >
-            {isSubmitting ? 'Verifying…' : 'Verify & Continue'}
+            {isSubmitting ? 'Verifying…' : isLocked ? `Try again in ${formatCountdown(retrySecondsLeft)}` : 'Verify & Continue'}
           </motion.button>
 
           <div className="mt-4 text-center">

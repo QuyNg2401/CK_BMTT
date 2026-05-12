@@ -39,6 +39,9 @@ export function EnableTwoFactorScreen({ userId, username, onComplete }: EnableTw
   const [qrError, setQrError] = useState<string | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [remainingAttempts, setRemainingAttempts] = useState<number | null>(null);
+  const [retryUntil, setRetryUntil] = useState<number | null>(null);
+  const [retrySecondsLeft, setRetrySecondsLeft] = useState(0);
   const [copiedKey, setCopiedKey] = useState(false);
   const [copiedCodes, setCopiedCodes] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -85,12 +88,34 @@ export function EnableTwoFactorScreen({ userId, username, onComplete }: EnableTw
     loadMfaSetup();
   }, [userId]);
 
+  useEffect(() => {
+    if (!retryUntil) {
+      setRetrySecondsLeft(0);
+      return;
+    }
+    const tick = () => {
+      const secondsLeft = Math.max(0, Math.ceil((retryUntil - Date.now()) / 1000));
+      setRetrySecondsLeft(secondsLeft);
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [retryUntil]);
+
+  const formatCountdown = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const handleChange = (index: number, value: string) => {
     if (!/^\d*$/.test(value)) return;
     const newCode = [...code];
     newCode[index] = value.slice(-1);
     setCode(newCode);
     setVerifyError(null);
+    setRemainingAttempts(null);
+    setRetryUntil(null);
     if (value && index < 5) inputRefs.current[index + 1]?.focus();
   };
 
@@ -108,6 +133,8 @@ export function EnableTwoFactorScreen({ userId, username, onComplete }: EnableTw
     pasted.split('').forEach((char, i) => { if (i < 6) newCode[i] = char; });
     setCode(newCode);
     setVerifyError(null);
+    setRemainingAttempts(null);
+    setRetryUntil(null);
     const nextEmpty = newCode.findIndex(v => !v);
     inputRefs.current[nextEmpty !== -1 ? nextEmpty : 5]?.focus();
   };
@@ -131,6 +158,10 @@ export function EnableTwoFactorScreen({ userId, username, onComplete }: EnableTw
       setVerifyError('Missing userId. Please login again before enabling 2FA.');
       return;
     }
+    if (retrySecondsLeft > 0) {
+      setVerifyError(`Too many attempts. Try again in ${formatCountdown(retrySecondsLeft)}.`);
+      return;
+    }
     if (!isFilled || !secretKey || isLoadingQr || isVerifying) return;
 
     const token = code.join('');
@@ -141,6 +172,7 @@ export function EnableTwoFactorScreen({ userId, username, onComplete }: EnableTw
 
     setIsVerifying(true);
     setVerifyError(null);
+    setRemainingAttempts(null);
 
     try {
       const response = await fetch(`${API_BASE_URL}/mfa/verify-setup`, {
@@ -151,6 +183,14 @@ export function EnableTwoFactorScreen({ userId, username, onComplete }: EnableTw
 
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
+        const attemptsLeft = typeof payload?.remainingAttempts === 'number' ? payload.remainingAttempts : null;
+        const retryAfter = typeof payload?.retryAfterSeconds === 'number' ? payload.retryAfterSeconds : 0;
+        if (attemptsLeft !== null) {
+          setRemainingAttempts(attemptsLeft);
+        }
+        if (retryAfter > 0) {
+          setRetryUntil(Date.now() + retryAfter * 1000);
+        }
         throw new Error(payload?.message || 'Unable to verify 2FA code.');
       }
 
@@ -166,6 +206,7 @@ export function EnableTwoFactorScreen({ userId, username, onComplete }: EnableTw
   };
 
   const isFilled = code.every(d => d !== '');
+  const isLocked = retrySecondsLeft > 0;
   const formattedSecret = secretKey.replace(/(.{4})/g, '$1 ').trim();
 
   return (
@@ -345,6 +386,16 @@ export function EnableTwoFactorScreen({ userId, username, onComplete }: EnableTw
                 {verifyError}
               </div>
             )}
+            {typeof remainingAttempts === 'number' && !isLocked && (
+              <div className="mt-2 text-center text-xs text-[#b45309]">
+                Remaining attempts: {remainingAttempts}
+              </div>
+            )}
+            {isLocked && (
+              <div className="mt-2 text-center text-xs text-[#b45309]">
+                Try again in {formatCountdown(retrySecondsLeft)}
+              </div>
+            )}
           </div>
 
           {/* Enable button */}
@@ -352,8 +403,8 @@ export function EnableTwoFactorScreen({ userId, username, onComplete }: EnableTw
             onClick={handleEnable}
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
-            disabled={!isFilled || !secretKey || isLoadingQr || isSuccess || isVerifying}
-            className={`w-full py-3.5 rounded-2xl text-white transition-all mb-4 shadow-[0_4px_16px_rgba(59,130,246,0.28)] ${isFilled && secretKey && !isLoadingQr && !isVerifying
+            disabled={!isFilled || !secretKey || isLoadingQr || isSuccess || isVerifying || isLocked}
+            className={`w-full py-3.5 rounded-2xl text-white transition-all mb-4 shadow-[0_4px_16px_rgba(59,130,246,0.28)] ${isFilled && secretKey && !isLoadingQr && !isVerifying && !isLocked
               ? 'bg-[#3b82f6] hover:bg-[#2563eb]'
               : 'bg-[#93c5fd] cursor-not-allowed'
               }`}
@@ -365,7 +416,9 @@ export function EnableTwoFactorScreen({ userId, username, onComplete }: EnableTw
                   <Check className="w-5 h-5" /> 2FA Enabled Successfully!
                 </motion.span>
               ) : (
-                <motion.span key="default">{isVerifying ? 'Verifying…' : 'Confirm & Enable 2FA'}</motion.span>
+                <motion.span key="default">
+                  {isVerifying ? 'Verifying…' : isLocked ? `Try again in ${formatCountdown(retrySecondsLeft)}` : 'Confirm & Enable 2FA'}
+                </motion.span>
               )}
             </AnimatePresence>
           </motion.button>

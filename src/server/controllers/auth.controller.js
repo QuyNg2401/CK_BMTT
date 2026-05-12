@@ -45,6 +45,20 @@ const AuthController = {
 
             res.status(200).json({ data: result });
         } catch (error) {
+            if (error?.code === 'OTP_LOCKED') {
+                return res.status(429).json({
+                    message: error.message,
+                    remainingAttempts: error.remainingAttempts ?? 0,
+                    retryAfterSeconds: error.retryAfterSeconds ?? 0,
+                });
+            }
+            if (error?.code === 'OTP_INVALID' || error?.code === 'OTP_REPLAY') {
+                return res.status(401).json({
+                    message: error.message,
+                    remainingAttempts: error.remainingAttempts ?? 0,
+                    retryAfterSeconds: 0,
+                });
+            }
             res.status(401).json({ message: error.message });
         }
     }
