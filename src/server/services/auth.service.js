@@ -16,22 +16,29 @@ const MFA_FAILED_WINDOW_MINUTES = 15;
 const MFA_MAX_FAILED_ATTEMPTS = 5;
 const TOTP_STEP_SECONDS = 30;
 
-const verifyTotp = (token, secret) => {
-    if (typeof otplib.verifySync !== 'function') {
+const getCurrentTotpStep = () => Math.floor(Date.now() / 1000 / TOTP_STEP_SECONDS);
+
+const getTotpStepMatch = (token, secret) => {
+    if (typeof otplib.generateSync !== 'function') {
         throw new Error('OTP library is not available');
     }
 
-    const result = otplib.verifySync({
-        token,
-        secret,
-        strategy: 'totp',
-    });
+    const currentStep = getCurrentTotpStep();
+    const steps = [currentStep - 1, currentStep, currentStep + 1];
 
-    if (typeof result === 'boolean') {
-        return result;
+    for (const step of steps) {
+        const expected = otplib.generateSync({
+            secret,
+            strategy: 'totp',
+            period: TOTP_STEP_SECONDS,
+            epoch: step * TOTP_STEP_SECONDS,
+        });
+        if (expected === token) {
+            return step;
+        }
     }
 
-    return Boolean(result && result.valid);
+    return null;
 };
 
 const createAccessToken = (user) => {
@@ -55,8 +62,6 @@ const getRetryAfterSeconds = (oldestAttempt) => {
     const elapsedSeconds = Math.floor((Date.now() - new Date(oldestAttempt).getTime()) / 1000);
     return Math.max(0, MFA_FAILED_WINDOW_MINUTES * 60 - elapsedSeconds);
 };
-
-const getCurrentTotpStep = () => Math.floor(Date.now() / 1000 / TOTP_STEP_SECONDS);
 
 const enforceMfaLockout = async (userId) => {
     const stats = await mfaLogRepo.getFailedAttemptStats(userId, MFA_FAILED_WINDOW_MINUTES);
@@ -132,29 +137,11 @@ const AuthService = {
 
         const failedStats = await enforceMfaLockout(userId);
 
-        const currentStep = getCurrentTotpStep();
-        const lastUsedStep = user.mfa_last_used_step == null ? null : Number(user.mfa_last_used_step);
-        if (lastUsedStep !== null && lastUsedStep === currentStep) {
-            const remainingAttempts = Math.max(0, MFA_MAX_FAILED_ATTEMPTS - (failedStats.total + 1));
-            try {
-                await mfaLogRepo.saveLog(userId, ipAddress, false);
-            } catch (logError) {
-                console.warn('[AuthService.verifyLoginStep2] Failed to log MFA attempt:', logError.message);
-            }
-            if (remainingAttempts === 0) {
-                const retryAfterSeconds = getRetryAfterSeconds(failedStats.oldestAttempt);
-                throw buildOtpError(
-                    'OTP_LOCKED',
-                    `Too many failed attempts. Try again in ${MFA_FAILED_WINDOW_MINUTES} minutes.`,
-                    0,
-                    retryAfterSeconds
-                );
-            }
-            throw buildOtpError('OTP_REPLAY', 'OTP already used. Wait for next code.', remainingAttempts, 0);
-        }
-
         const decryptedSecret = decrypt(user.mfa_secret);
-        const isValid = verifyTotp(token.trim(), decryptedSecret);
+        const matchedStep = getTotpStepMatch(token.trim(), decryptedSecret);
+        const lastUsedStep = user.mfa_last_used_step == null ? null : Number(user.mfa_last_used_step);
+        const isReplay = matchedStep !== null && lastUsedStep !== null && lastUsedStep === matchedStep;
+        const isValid = matchedStep !== null && !isReplay;
         try {
             await mfaLogRepo.saveLog(userId, ipAddress, isValid);
         } catch (logError) {
@@ -171,11 +158,14 @@ const AuthService = {
                     retryAfterSeconds
                 );
             }
+            if (isReplay) {
+                throw buildOtpError('OTP_REPLAY', 'OTP already used. Wait for next code.', remainingAttempts, 0);
+            }
             throw buildOtpError('OTP_INVALID', 'Invalid or expired OTP', remainingAttempts, 0);
         }
 
         try {
-            await userRepo.updateMfaLastUsedStep(userId, currentStep);
+            await userRepo.updateMfaLastUsedStep(userId, matchedStep);
         } catch (updateError) {
             console.warn('[AuthService.verifyLoginStep2] Failed to update last used step:', updateError.message);
         }
