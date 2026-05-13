@@ -55,6 +55,7 @@ const MfaController = {
         qrCodeDataUrl,
       });
     } catch (error) {
+      console.error('[MfaController.setupForUser] Error:', error);
       const status = error?.statusCode === 404 ? 404 : 500;
       const message = status === 404 ? "user not found" : "failed to create mfa setup";
       return res.status(status).json({ message });

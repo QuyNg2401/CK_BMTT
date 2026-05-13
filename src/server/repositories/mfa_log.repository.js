@@ -68,6 +68,23 @@ const createMfaLogRepository = (db) => {
                 total: rows[0].total,
                 oldestAttempt: rows[0].oldest_attempt || null,
             };
+        },
+
+        // Kiểm tra xem IP này đã từng đăng nhập thành công trước đó hay chưa
+        hasSuccessfulLoginFromIP: async (userId, ipAddress) => {
+            // Nếu không xác định được IP, ta tạm coi như an toàn để tránh spam email
+            if (!ipAddress) return true; 
+
+            const columnName = await resolveUserIdColumn();
+            const [rows] = await db.query(
+                `SELECT 1 FROM mfa_logs 
+                 WHERE ${columnName} = ? 
+                 AND ip_address = ? 
+                 AND is_success = 1 
+                 LIMIT 1`,
+                [userId, ipAddress]
+            );
+            return rows.length > 0;
         }
     };
 };

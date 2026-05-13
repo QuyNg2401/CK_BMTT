@@ -5,6 +5,7 @@ const db = require('../configs/connectDB');
 const createUserRepo = require('../repositories/user.repository');
 const createMfaLogRepo = require('../repositories/mfa_log.repository');
 const { decrypt } = require('../utilities/encryption');
+const EmailService = require('./email.service');
 
 // Khởi tạo Repository
 const userRepo = createUserRepo(db);
@@ -78,7 +79,7 @@ const enforceMfaLockout = async (userId) => {
 };
 
 const AuthService = {
-    register: async(username, password) => {
+    register: async (username, password) => {
         const existingUser = await userRepo.findByUsername(username);
         if (existingUser) throw new Error('The username already exists');
 
@@ -88,7 +89,7 @@ const AuthService = {
         return await userRepo.insertUser(username, passwordHash);
     },
 
-    loginStep1: async(username, password) => {
+    loginStep1: async (username, password) => {
         const user = await userRepo.getCredentialsByUsername(username);
         if (!user) throw new Error('Incorrect username, or password');
 
@@ -142,6 +143,20 @@ const AuthService = {
         const lastUsedStep = user.mfa_last_used_step == null ? null : Number(user.mfa_last_used_step);
         const isReplay = matchedStep !== null && lastUsedStep !== null && lastUsedStep === matchedStep;
         const isValid = matchedStep !== null && !isReplay;
+
+        if (isValid && ipAddress) {
+            try {
+                const isKnownIp = await mfaLogRepo.hasSuccessfulLoginFromIP(userId, ipAddress);
+                if (!isKnownIp) {
+                    EmailService.sendNewDeviceAlert(user.username, ipAddress).catch(err =>
+                        console.error('[AuthService] EmailService error:', err)
+                    );
+                }
+            } catch (err) {
+                console.error('[AuthService.verifyLoginStep2] Lỗi kiểm tra IP lạ:', err.message);
+            }
+        }
+
         try {
             await mfaLogRepo.saveLog(userId, ipAddress, isValid);
         } catch (logError) {
