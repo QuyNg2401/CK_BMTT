@@ -20,11 +20,7 @@ const features = [
   { icon: Globe, text: 'Zero-knowledge security architecture' },
 ];
 
-const DEMO_ACCOUNT = {
-  email: 'jane.smith@secureauth.io',
-  password: 'Demo@2024!',
-  name: 'Jane Smith',
-};
+
 
 export function LoginScreen({ onContinue, onSignUpClick }: LoginScreenProps) {
   const API_BASE_URL =
@@ -36,19 +32,8 @@ export function LoginScreen({ onContinue, onSignUpClick }: LoginScreenProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
-  const [filledDemo, setFilledDemo] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
-
-  const isDemoCredentials = email === DEMO_ACCOUNT.email && password === DEMO_ACCOUNT.password;
-
-  const handleFillDemo = () => {
-    setEmail(DEMO_ACCOUNT.email);
-    setPassword(DEMO_ACCOUNT.password);
-    setHasError(false);
-    setApiError(null);
-    setFilledDemo(true);
-  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -187,60 +172,7 @@ export function LoginScreen({ onContinue, onSignUpClick }: LoginScreenProps) {
             <p className="text-[#64748b] text-sm">Sign in to your account to continue</p>
           </div>
 
-          {/* Demo account card */}
-          <motion.button
-            onClick={handleFillDemo}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.98 }}
-            className="w-full mb-5 flex items-center gap-3 bg-gradient-to-r from-[#eff6ff] to-[#f5f3ff] border border-[#bfdbfe] hover:border-[#93c5fd] rounded-2xl px-4 py-3.5 text-left transition-all group"
-          >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#3b82f6] to-[#6366f1] flex items-center justify-center flex-shrink-0 shadow-[0_4px_8px_rgba(99,102,241,0.3)]">
-              <Shield className="w-4 h-4 text-white" strokeWidth={2.5} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="text-[#1e293b] text-sm" style={{ fontWeight: 600 }}>Jane Smith</p>
-                <span className="bg-[#dbeafe] text-[#1d4ed8] text-xs px-2 py-0.5 rounded-full" style={{ fontWeight: 600 }}>
-                  Demo account
-                </span>
-              </div>
-              <p className="text-[#94a3b8] text-xs truncate mt-0.5">{DEMO_ACCOUNT.email}</p>
-            </div>
-            <AnimatePresence mode="wait">
-              {filledDemo && isDemoCredentials ? (
-                <motion.div
-                  key="check"
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0, opacity: 0 }}
-                  className="w-6 h-6 rounded-full bg-[#22c55e] flex items-center justify-center flex-shrink-0"
-                >
-                  <CheckCircle className="w-3.5 h-3.5 text-white" />
-                </motion.div>
-              ) : (
-                <motion.span
-                  key="fill"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="text-[#3b82f6] text-xs group-hover:text-[#2563eb] transition-colors flex-shrink-0"
-                  style={{ fontWeight: 600 }}
-                >
-                  Use →
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </motion.button>
 
-          {/* Divider */}
-          <div className="relative mb-5">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-[#e2e8f0]" />
-            </div>
-            <div className="relative flex justify-center">
-              <span className="bg-[#f0f6ff] px-3 text-[#94a3b8] text-xs">OR SIGN IN MANUALLY</span>
-            </div>
-          </div>
 
           <div className="space-y-4 mb-6">
             {/* Email field */}
@@ -333,13 +265,10 @@ export function LoginScreen({ onContinue, onSignUpClick }: LoginScreenProps) {
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
             disabled={isSubmitting}
-            className={`w-full py-3.5 rounded-2xl text-white transition-colors mb-5 shadow-[0_4px_16px_rgba(59,130,246,0.35)] ${isDemoCredentials
-              ? 'bg-gradient-to-r from-[#3b82f6] to-[#6366f1] hover:from-[#2563eb] hover:to-[#4f46e5]'
-              : 'bg-[#3b82f6] hover:bg-[#2563eb]'
-              }`}
+            className="w-full py-3.5 rounded-2xl text-white bg-[#3b82f6] hover:bg-[#2563eb] transition-colors mb-5 shadow-[0_4px_16px_rgba(59,130,246,0.35)]"
             style={{ fontWeight: 600 }}
           >
-            {isSubmitting ? 'Signing in...' : isDemoCredentials ? 'Sign in as Jane Smith →' : 'Continue with email'}
+            {isSubmitting ? 'Signing in...' : 'Continue with email'}
           </motion.button>
 
           {/* OR CONTINUE WITH divider */}
