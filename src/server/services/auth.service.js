@@ -97,7 +97,11 @@ const AuthService = {
         if (!isMatch) throw new Error('Incorrect username or password');
 
         const isMfaEnabled = Number(user.mfaEnabled) === 1;
-        console.log('[AuthService.loginStep1] User:', { username, userId: user.id, mfaEnabled: user.mfaEnabled, isMfaEnabled });
+        console.log('[AuthService.loginStep1] User:', {
+            username,
+            userId: user.id,
+            mfaEnabled: user.mfaEnabled,
+            isMfaEnabled });
 
         if (isMfaEnabled) {
             console.log('[AuthService.loginStep1] MFA enabled, returning REQUIRE_OTP');
@@ -156,7 +160,6 @@ const AuthService = {
                 console.error('[AuthService.verifyLoginStep2] Lỗi kiểm tra IP lạ:', err.message);
             }
         }
-
         try {
             await mfaLogRepo.saveLog(userId, ipAddress, isValid);
         } catch (logError) {
@@ -178,20 +181,13 @@ const AuthService = {
             }
             throw buildOtpError('OTP_INVALID', 'Invalid or expired OTP', remainingAttempts, 0);
         }
-
         try {
             await userRepo.updateMfaLastUsedStep(userId, matchedStep);
         } catch (updateError) {
             console.warn('[AuthService.verifyLoginStep2] Failed to update last used step:', updateError.message);
         }
-
         const accessToken = createAccessToken(user);
-
-        return {
-            status: 'OK',
-            accessToken,
-            userId: user.id,
-            username: user.username
+        return {status: 'OK', accessToken, userId: user.id, username: user.username
         };
     }
 }
