@@ -20,8 +20,8 @@ mysql -u root < server/database/database.sql
 PORT=3000
 JWT_SECRET=your_secret_key
 MFA_ENCRYPTION_KEY=883f3019381fd35f9f78a160e1a8c60548f886357d02e097b42990b5f9dbacaa
-SMTP_EMAIL=tienluc14052005@gmail.com
-SMTP_PASSWORD=gmgayqiwulergnwm
+SMTP_EMAIL=your_email
+SMTP_PASSWORD=your_password_email
 ```
 
 ### 3. Chạy backend
